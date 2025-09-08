@@ -1,0 +1,31 @@
+[project]
+name = "finetune"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "tonible14012002",email = "namanh14.work@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "transformers[torch] (>=4.56.1,<5.0.0)",
+    "pydantic (>=2.11.7,<3.0.0)",
+    "scikit-learn (>=1.7.1,<2.0.0)"
+]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+package-mode = false
+
+[tool.poetry.group.train]
+optional = true
+
+[tool.poetry.group.train.dependencies]
+peft = "^0.17.1"
+datasets = "^4.0.0"
+huggingface-hub = "^0.34.4"
+evaluate = "^0.4.5"
+"scikit-learn (>=1.7.1,<2.0.0)"

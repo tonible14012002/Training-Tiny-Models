@@ -1,0 +1,1487 @@
+[
+  {
+    "text": "Hey, are you free later to grab coffee?",
+    "label": 0,
+    "tags": ["casual", "friends", "informal"]
+  },
+  {
+    "text": "Don't forget your umbrella, it looks like rain.",
+    "label": 0,
+    "tags": ["casual", "reminder", "family"]
+  },
+  {
+    "text": "Can you send me your part of the electricity bill?",
+    "label": 1,
+    "tags": ["transactional", "roommates", "request"]
+  },
+  {
+    "text": "Your food delivery is waiting outside your door.",
+    "label": 0,
+    "tags": ["service", "professional", "neutral"]
+  },
+  {
+    "text": "Dad, I made it safely. Don't worry.",
+    "label": 0,
+    "tags": ["family", "reassurance", "informal"]
+  },
+  {
+    "text": "Can you cover my half of the Uber, I'll send later?",
+    "label": 1,
+    "tags": ["transactional", "friends", "casual"]
+  },
+  {
+    "text": "Meeting pushed to 4pm, please confirm.",
+    "label": 0,
+    "tags": ["work", "professional", "formal"]
+  },
+  {
+    "text": "Thanks for the flowers, they're beautiful 💐",
+    "label": 0,
+    "tags": ["gratitude", "romantic", "casual"]
+  },
+  {
+    "text": "Hi, the rent is due today, kindly transfer the amount.",
+    "label": 1,
+    "tags": ["transactional", "landlord", "formal"]
+  },
+  {
+    "text": "Are you still coming to class or running late?",
+    "label": 0,
+    "tags": ["school", "casual", "friends"]
+  },
+  {
+    "text": "Could you email me the invoice again, I can't find it.",
+    "label": 1,
+    "tags": ["transactional", "professional", "request"]
+  },
+  {
+    "text": "Bro, bring snacks when you come over.",
+    "label": 0,
+    "tags": ["siblings", "slang", "casual"]
+  },
+  {
+    "text": "Your subscription has been renewed successfully.",
+    "label": 1,
+    "tags": ["service", "notification", "professional"]
+  },
+  {
+    "text": "What's the Wi-Fi password again?",
+    "label": 0,
+    "tags": ["casual", "friends", "informal"]
+  },
+  {
+    "text": "I'll cover the bill this time, don't worry.",
+    "label": 1,
+    "tags": ["transactional", "friends", "casual"]
+  },
+  {
+    "text": "Please review the attached contract and confirm.",
+    "label": 0,
+    "tags": ["work", "professional", "formal"]
+  },
+  {
+    "text": "Miss you already, call me when you wake up 💕",
+    "label": 0,
+    "tags": ["romantic", "casual", "affection"]
+  },
+  {
+    "text": "I just sent you the 50 bucks I owed, check your app.",
+    "label": 1,
+    "tags": ["transactional", "friends", "informal"]
+  },
+  {
+    "text": "Hey, wanna trade seats tomorrow in class?",
+    "label": 0,
+    "tags": ["school", "casual", "friends"]
+  },
+  {
+    "text": "The plumber will arrive at 10am, can you be home?",
+    "label": 0,
+    "tags": ["service", "neutral", "neighbors"]
+  },
+  {
+    "text": "Can I pay you back in two installments?",
+    "label": 1,
+    "tags": ["transactional", "informal", "friends"]
+  },
+  {
+    "text": "Your package couldn't be delivered, please reschedule.",
+    "label": 0,
+    "tags": ["service", "professional", "notification"]
+  },
+  {
+    "text": "Let's cook dinner at my place tonight.",
+    "label": 0,
+    "tags": ["casual", "friends", "informal"]
+  },
+  {
+    "text": "Hi, your cab fare has been charged: $18.40.",
+    "label": 1,
+    "tags": ["transactional", "service", "notification"]
+  },
+  {
+    "text": "I'll Venmo you for the movie tickets.",
+    "label": 1,
+    "tags": ["transactional", "friends", "casual"]
+  },
+  {
+    "text": "Neighbor, your dog is outside again 🐶",
+    "label": 0,
+    "tags": ["neighbors", "casual", "informal"]
+  },
+  {
+    "text": "Grandma says hi and asks if you're eating well.",
+    "label": 0,
+    "tags": ["family", "casual", "affection"]
+  },
+  {
+    "text": "Invoice #2243 is attached, payment due Friday.",
+    "label": 1,
+    "tags": ["transactional", "professional", "formal"]
+  },
+  {
+    "text": "Need help moving a couch this weekend?",
+    "label": 0,
+    "tags": ["friends", "casual", "request"]
+  },
+  {
+    "text": "I sent the rent to your account, please confirm.",
+    "label": 1,
+    "tags": ["transactional", "roommates", "formal"]
+  },
+  {
+    "text": "Thanks for letting me crash on your couch last night.",
+    "label": 0,
+    "tags": ["friends", "gratitude", "casual"]
+  },
+  {
+    "text": "Doctor's appointment is tomorrow at 9am, don't forget.",
+    "label": 0,
+    "tags": ["reminder", "family", "neutral"]
+  },
+  {
+    "text": "Please pay the deposit to secure your booking.",
+    "label": 1,
+    "tags": ["transactional", "professional", "formal"]
+  },
+  {
+    "text": "Yo, did you watch the game last night?!",
+    "label": 0,
+    "tags": ["friends", "slang", "casual"]
+  },
+  {
+    "text": "Just a reminder that your phone bill is unpaid.",
+    "label": 1,
+    "tags": ["transactional", "service", "notification"]
+  },
+  {
+    "text": "Hey stranger, long time no see 👋",
+    "label": 0,
+    "tags": ["casual", "friends", "informal"]
+  },
+  {
+    "text": "Lunch on me today, you covered last time.",
+    "label": 1,
+    "tags": ["transactional", "friends", "casual"]
+  },
+  {
+    "text": "Your order has been canceled, full refund issued.",
+    "label": 1,
+    "tags": ["transactional", "service", "professional"]
+  },
+  {
+    "text": "Mom, I'm at the library, will be home later.",
+    "label": 0,
+    "tags": ["family", "casual", "informal"]
+  },
+  {
+    "text": "Please confirm receipt of $300 transfer.",
+    "label": 1,
+    "tags": ["transactional", "formal", "confirmation"]
+  },
+  {
+    "text": "Bring your laptop, we'll work at the café.",
+    "label": 0,
+    "tags": ["friends", "casual", "informal"]
+  },
+  {
+    "text": "Your water bill is ready, due by the 15th.",
+    "label": 1,
+    "tags": ["transactional", "service", "notification"]
+  },
+  {
+    "text": "Congrats on your promotion! Drinks soon?",
+    "label": 0,
+    "tags": ["friends", "celebration", "casual"]
+  },
+  {
+    "text": "Seller here, I can lower the price to $45.",
+    "label": 1,
+    "tags": ["transactional", "buyer-seller", "informal"]
+  },
+  {
+    "text": "Thanks again for babysitting last night.",
+    "label": 0,
+    "tags": ["gratitude", "family", "casual"]
+  },
+  {
+    "text": "Reminder: meeting with HR at 2pm today.",
+    "label": 0,
+    "tags": ["work", "professional", "formal"]
+  },
+  {
+    "text": "Can I borrow your charger for a bit?",
+    "label": 0,
+    "tags": ["casual", "friends", "informal"]
+  },
+  {
+    "text": "Balance remaining is $120, please clear ASAP.",
+    "label": 1,
+    "tags": ["transactional", "formal", "request"]
+  },
+  {
+    "text": "Happy New Year! Wishing you joy and health.",
+    "label": 0,
+    "tags": ["celebration", "family", "formal"]
+  },
+  {
+    "text": "Can I split the dinner bill with you now?",
+    "label": 1,
+    "tags": ["transactional", "friends", "casual"]
+  },
+  {
+    "text": "Did you finish your assignment yet?",
+    "label": 0,
+    "tags": ["school", "casual", "classmates"]
+  },
+  {
+    "text": "The meeting notes are in the shared folder.",
+    "label": 0,
+    "tags": ["work", "professional", "formal"]
+  },
+  {
+    "text": "Split the gas money? It was $40 total.",
+    "label": 1,
+    "tags": ["transactional", "friends", "casual"]
+  },
+  {
+    "text": "Your pizza will be there in 20 minutes.",
+    "label": 0,
+    "tags": ["service", "professional", "notification"]
+  },
+  {
+    "text": "Sorry I'm late, traffic is crazy right now.",
+    "label": 0,
+    "tags": ["casual", "friends", "apology"]
+  },
+  {
+    "text": "Can you wire the payment by end of business today?",
+    "label": 1,
+    "tags": ["transactional", "professional", "formal"]
+  },
+  {
+    "text": "Just landed! Miss you already ✈️",
+    "label": 0,
+    "tags": ["romantic", "casual", "affection"]
+  },
+  {
+    "text": "Your loan payment is overdue, please contact us.",
+    "label": 1,
+    "tags": ["transactional", "service", "formal"]
+  },
+  {
+    "text": "Movie night at 8? I'll bring popcorn.",
+    "label": 0,
+    "tags": ["friends", "casual", "informal"]
+  },
+  {
+    "text": "Commission for last month's sales: $2,340.",
+    "label": 1,
+    "tags": ["transactional", "work", "professional"]
+  },
+  {
+    "text": "Can't make it tonight, feeling under the weather.",
+    "label": 0,
+    "tags": ["friends", "casual", "apology"]
+  },
+  {
+    "text": "Final payment due upon delivery, thanks.",
+    "label": 1,
+    "tags": ["transactional", "buyer-seller", "formal"]
+  },
+  {
+    "text": "Good luck on your interview tomorrow!",
+    "label": 0,
+    "tags": ["friends", "support", "casual"]
+  },
+  {
+    "text": "Insurance claim approved, check your email.",
+    "label": 1,
+    "tags": ["transactional", "service", "professional"]
+  },
+  {
+    "text": "Wanna grab lunch after this boring meeting?",
+    "label": 0,
+    "tags": ["coworkers", "casual", "informal"]
+  },
+  {
+    "text": "Can I pay you through PayPal instead?",
+    "label": 1,
+    "tags": ["transactional", "casual", "request"]
+  },
+  {
+    "text": "Left my keys at your place, can I swing by?",
+    "label": 0,
+    "tags": ["friends", "casual", "request"]
+  },
+  {
+    "text": "Tax refund processed: $1,247 deposited today.",
+    "label": 1,
+    "tags": ["transactional", "service", "notification"]
+  },
+  {
+    "text": "Pick me up at the airport gate B12.",
+    "label": 0,
+    "tags": ["family", "casual", "request"]
+  },
+  {
+    "text": "Monthly subscription fee charged: $9.99.",
+    "label": 1,
+    "tags": ["transactional", "service", "notification"]
+  },
+  {
+    "text": "Study group is canceled, test moved to Friday.",
+    "label": 0,
+    "tags": ["school", "classmates", "notification"]
+  },
+  {
+    "text": "I'll cover the tip if you get the check.",
+    "label": 1,
+    "tags": ["transactional", "friends", "casual"]
+  },
+  {
+    "text": "The wifi is acting up again, calling tech support.",
+    "label": 0,
+    "tags": ["roommates", "casual", "neutral"]
+  },
+  {
+    "text": "Emergency! Need someone to walk my dog ASAP",
+    "label": 0,
+    "tags": ["urgent", "pet-care", "neighbors"]
+  },
+  {
+    "text": "Crypto transfer confirmed: 0.5 BTC received",
+    "label": 1,
+    "tags": ["cryptocurrency", "digital", "confirmation"]
+  },
+  {
+    "text": "The baby is teething and won't stop crying 😭",
+    "label": 0,
+    "tags": ["parenting", "support", "stressed"]
+  },
+  {
+    "text": "Freelance project payment: $850 via direct deposit",
+    "label": 1,
+    "tags": ["freelance", "professional", "earnings"]
+  },
+  {
+    "text": "Anyone know a good therapist in the area?",
+    "label": 0,
+    "tags": ["mental-health", "recommendations", "personal"]
+  },
+  {
+    "text": "My anxiety is through the roof today",
+    "label": 0,
+    "tags": ["mental-health", "vulnerable", "support"]
+  },
+  {
+    "text": "The sunset from here is absolutely breathtaking",
+    "label": 0,
+    "tags": ["nature", "peaceful", "sharing-moment"]
+  },
+  {
+    "text": "Just finished my marathon! 4:23:15",
+    "label": 0,
+    "tags": ["fitness", "achievement", "proud"]
+  },
+  {
+    "text": "Can't sleep, mind keeps racing about everything",
+    "label": 0,
+    "tags": ["insomnia", "anxiety", "late-night"]
+  },
+  {
+    "text": "The northern lights are visible tonight!",
+    "label": 0,
+    "tags": ["astronomy", "rare-event", "excitement"]
+  },
+  {
+    "text": "My grandmother passed away this morning",
+    "label": 0,
+    "tags": ["grief", "family-loss", "sad-news"]
+  },
+  {
+    "text": "Found a lost cat, posting on neighborhood app",
+    "label": 0,
+    "tags": ["community", "animal-rescue", "helping"]
+  },
+  {
+    "text": "Meditation retreat this weekend changed my life",
+    "label": 0,
+    "tags": ["spirituality", "self-improvement", "transformative"]
+  },
+  {
+    "text": "Storm knocked out power, using mobile hotspot",
+    "label": 0,
+    "tags": ["weather", "emergency", "infrastructure"]
+  },
+  {
+    "text": "My sobriety chip ceremony is tomorrow",
+    "label": 0,
+    "tags": ["recovery", "milestone", "personal-growth"]
+  },
+  {
+    "text": "Witnessed a car accident, staying to give statement",
+    "label": 0,
+    "tags": ["witness", "civic-duty", "emergency"]
+  },
+  {
+    "text": "My therapist says I'm making real progress",
+    "label": 0,
+    "tags": ["therapy", "progress", "mental-health"]
+  },
+  {
+    "text": "Adopted a rescue dog today, she's perfect!",
+    "label": 0,
+    "tags": ["pet-adoption", "rescue", "new-family"]
+  },
+  {
+    "text": "Greenhouse tomatoes are finally ripening",
+    "label": 0,
+    "tags": ["gardening", "self-sufficient", "harvest"]
+  },
+  {
+    "text": "Started learning Mandarin, it's incredibly difficult",
+    "label": 0,
+    "tags": ["language-learning", "challenge", "education"]
+  },
+  {
+    "text": "Book club discussion tonight was mind-blowing",
+    "label": 0,
+    "tags": ["literature", "intellectual", "social"]
+  },
+  {
+    "text": "Volunteering at the food bank this Saturday",
+    "label": 0,
+    "tags": ["volunteering", "community-service", "helping"]
+  },
+  {
+    "text": "Learning to code Python, finally understanding loops",
+    "label": 0,
+    "tags": ["programming", "education", "breakthrough"]
+  },
+  {
+    "text": "My son took his first steps today!",
+    "label": 0,
+    "tags": ["parenting", "milestone", "proud-moment"]
+  },
+  {
+    "text": "Hiking the entire Appalachian Trail next year",
+    "label": 0,
+    "tags": ["adventure", "hiking", "life-goals"]
+  },
+  {
+    "text": "Stargazing tonight, Jupiter is incredibly bright",
+    "label": 0,
+    "tags": ["astronomy", "nature", "peaceful"]
+  },
+  {
+    "text": "Scholarship money came through: $5,000 for next semester!",
+    "label": 1,
+    "tags": ["education", "financial-aid", "good-news"]
+  },
+  {
+    "text": "The dog got into the garbage again, what a mess",
+    "label": 0,
+    "tags": ["pets", "daily-life", "frustrated"]
+  },
+  {
+    "text": "Uber driver tip added: $3.50 via app",
+    "label": 1,
+    "tags": ["rideshare", "service", "gratuity"]
+  },
+  {
+    "text": "My new job starts Monday, so excited!",
+    "label": 0,
+    "tags": ["career", "new-beginning", "excited"]
+  },
+  {
+    "text": "Online course fee refunded: $299 back to your card",
+    "label": 1,
+    "tags": ["education", "refund", "online-learning"]
+  },
+  {
+    "text": "Rain cancelled the outdoor wedding, moving inside",
+    "label": 0,
+    "tags": ["weather", "events", "adaptation"]
+  },
+  {
+    "text": "Security deposit for apartment: $1,800 due at signing",
+    "label": 1,
+    "tags": ["housing", "rental", "deposit"]
+  },
+  {
+    "text": "My neighbor's music is way too loud again",
+    "label": 0,
+    "tags": ["neighbors", "noise", "complaint"]
+  },
+  {
+    "text": "Gym membership auto-renewal: $49.99/month",
+    "label": 1,
+    "tags": ["fitness", "subscription", "recurring"]
+  },
+  {
+    "text": "The new restaurant downtown has amazing reviews",
+    "label": 0,
+    "tags": ["dining", "recommendations", "local"]
+  },
+  {
+    "text": "Lottery winnings: $250 scratch-off prize!",
+    "label": 1,
+    "tags": ["gambling", "winnings", "luck"]
+  },
+  {
+    "text": "Traffic jam on Highway 101, taking side streets",
+    "label": 0,
+    "tags": ["traffic", "commute", "navigation"]
+  },
+  {
+    "text": "Pet insurance claim paid: $650 for surgery",
+    "label": 1,
+    "tags": ["veterinary", "insurance", "pet-care"]
+  },
+  {
+    "text": "Finally finished that 1000-piece puzzle!",
+    "label": 0,
+    "tags": ["hobby", "achievement", "patience"]
+  },
+  {
+    "text": "Affiliate marketing commission: $127.50 this week",
+    "label": 1,
+    "tags": ["online-business", "commission", "marketing"]
+  },
+  {
+    "text": "My flight got delayed by 3 hours, stuck at airport",
+    "label": 0,
+    "tags": ["travel", "delays", "airport"]
+  },
+  {
+    "text": "Parking meter expired, got a $45 ticket",
+    "label": 1,
+    "tags": ["parking", "fine", "traffic-violation"]
+  },
+  {
+    "text": "The kids built an amazing fort in the backyard",
+    "label": 0,
+    "tags": ["children", "play", "creativity"]
+  },
+  {
+    "text": "Wedding gift contribution via Zelle: $100",
+    "label": 1,
+    "tags": ["gifts", "celebrations", "social"]
+  },
+  {
+    "text": "Power outage in our neighborhood for 6 hours",
+    "label": 0,
+    "tags": ["utilities", "outage", "inconvenience"]
+  },
+  {
+    "text": "Charity donation receipt: $500 to Red Cross",
+    "label": 1,
+    "tags": ["charity", "donation", "helping"]
+  },
+  {
+    "text": "My interview went really well, fingers crossed!",
+    "label": 0,
+    "tags": ["job-search", "interviews", "hopeful"]
+  },
+  {
+    "text": "eBay sale completed: vintage camera sold for $380",
+    "label": 1,
+    "tags": ["selling", "vintage", "photography"]
+  },
+  {
+    "text": "Garden sprinkler system is acting up again",
+    "label": 0,
+    "tags": ["home-maintenance", "gardening", "problems"]
+  },
+  {
+    "text": "Cashier overpaid me $20, going back to return it",
+    "label": 1,
+    "tags": ["honesty", "retail", "ethics"]
+  },
+  {
+    "text": "Beach day tomorrow if the weather holds up",
+    "label": 0,
+    "tags": ["leisure", "weather", "plans"]
+  },
+  {
+    "text": "Property tax bill: $3,400 due by December 31st",
+    "label": 1,
+    "tags": ["taxes", "property", "government"]
+  },
+  {
+    "text": "The cat is hiding under the bed during the storm",
+    "label": 0,
+    "tags": ["pets", "weather", "behavior"]
+  },
+  {
+    "text": "Stock options vested: $12,000 cash value",
+    "label": 1,
+    "tags": ["investments", "compensation", "corporate"]
+  },
+  {
+    "text": "Local farmers market has the best strawberries",
+    "label": 0,
+    "tags": ["food", "local", "seasonal"]
+  },
+  {
+    "text": "Medical copay for specialist visit: $75",
+    "label": 1,
+    "tags": ["healthcare", "specialist", "copay"]
+  },
+  {
+    "text": "Baby shower this weekend, can't wait to celebrate!",
+    "label": 0,
+    "tags": ["celebrations", "pregnancy", "friends"]
+  },
+  {
+    "text": "Bonus check from work: $2,500 before taxes",
+    "label": 1,
+    "tags": ["work", "bonus", "reward"]
+  },
+  {
+    "text": "My sourdough starter is finally ready after a week",
+    "label": 0,
+    "tags": ["baking", "patience", "hobby"]
+  },
+  {
+    "text": "Car repair estimate: $850 for transmission work",
+    "label": 1,
+    "tags": ["automotive", "repairs", "estimate"]
+  },
+  {
+    "text": "Neighborhood watch meeting tonight at 7pm",
+    "label": 0,
+    "tags": ["community", "safety", "civic"]
+  },
+  {
+    "text": "Inheritance check deposited: $15,000 from grandpa",
+    "label": 1,
+    "tags": ["inheritance", "family", "legacy"]
+  },
+  {
+    "text": "The northern lights forecast looks promising tonight",
+    "label": 0,
+    "tags": ["astronomy", "nature", "rare-events"]
+  },
+  {
+    "text": "Overtime pay this week: extra $340 on paycheck",
+    "label": 1,
+    "tags": ["work", "overtime", "extra-income"]
+  },
+  {
+    "text": "My houseplants are thriving in this weather",
+    "label": 0,
+    "tags": ["gardening", "indoor-plants", "success"]
+  },
+  {
+    "text": "Streaming service annual fee: $119.99 charged today",
+    "label": 1,
+    "tags": ["entertainment", "subscription", "annual"]
+  },
+  {
+    "text": "Road trip playlist is finally complete, 200 songs!",
+    "label": 0,
+    "tags": ["travel", "music", "preparation"]
+  },
+  {
+    "text": "Freelance writing gig paid: $450 for article series",
+    "label": 1,
+    "tags": ["freelance", "writing", "journalism"]
+  },
+  {
+    "text": "The new coffee shop downtown has amazing pastries",
+    "label": 0,
+    "tags": ["food", "local-business", "recommendations"]
+  },
+  {
+    "text": "Wedding venue deposit: $2,000 to secure the date",
+    "label": 1,
+    "tags": ["wedding", "venue", "planning"]
+  },
+  {
+    "text": "My teenager finally cleaned their room without asking!",
+    "label": 0,
+    "tags": ["parenting", "teenagers", "surprise"]
+  },
+  {
+    "text": "Tuition reimbursement from employer: $3,500",
+    "label": 1,
+    "tags": ["education", "employer-benefits", "reimbursement"]
+  },
+  {
+    "text": "First snow of the season, the kids are so excited",
+    "label": 0,
+    "tags": ["weather", "seasons", "children"]
+  },
+  {
+    "text": "Concert ticket refund: $89 for cancelled show",
+    "label": 1,
+    "tags": ["entertainment", "refund", "cancellation"]
+  },
+  {
+    "text": "Marathon training is getting intense, 15 miles today",
+    "label": 0,
+    "tags": ["fitness", "training", "endurance"]
+  },
+  {
+    "text": "Garage sale earnings: $238 from weekend sales",
+    "label": 1,
+    "tags": ["garage-sale", "decluttering", "earnings"]
+  },
+  {
+    "text": "The library's book club is reading my favorite novel",
+    "label": 0,
+    "tags": ["literature", "library", "book-club"]
+  },
+  {
+    "text": "Photography workshop fee: $150 for weekend class",
+    "label": 1,
+    "tags": ["education", "photography", "workshop"]
+  },
+  {
+    "text": "My garden tomatoes are finally starting to ripen",
+    "label": 0,
+    "tags": ["gardening", "harvest", "seasonal"]
+  },
+  {
+    "text": "Etsy shop revenue this month: $1,250 in sales",
+    "label": 1,
+    "tags": ["small-business", "crafts", "online-sales"]
+  },
+  {
+    "text": "Volunteering at animal shelter this Saturday morning",
+    "label": 0,
+    "tags": ["volunteering", "animals", "community-service"]
+  },
+  {
+    "text": "Home insurance claim approved: $8,500 for roof damage",
+    "label": 1,
+    "tags": ["insurance", "home-repairs", "claim"]
+  },
+  {
+    "text": "New hiking trail opened up in the state park",
+    "label": 0,
+    "tags": ["hiking", "nature", "recreation"]
+  },
+  {
+    "text": "Student loan payment: $285 monthly auto-debit",
+    "label": 1,
+    "tags": ["education", "debt", "monthly-payment"]
+  },
+  {
+    "text": "The neighborhood food truck has the best tacos",
+    "label": 0,
+    "tags": ["food", "street-food", "local"]
+  },
+  {
+    "text": "Tax preparation fee: $250 for complex return",
+    "label": 1,
+    "tags": ["taxes", "professional-services", "annual"]
+  },
+  {
+    "text": "My daughter made honor roll again this semester",
+    "label": 0,
+    "tags": ["parenting", "education", "achievement"]
+  },
+  {
+    "text": "Consulting project milestone payment: $2,800",
+    "label": 1,
+    "tags": ["consulting", "milestone", "professional"]
+  },
+  {
+    "text": "Learning to play chess, it's more complex than I thought",
+    "label": 0,
+    "tags": ["games", "learning", "strategy"]
+  },
+  {
+    "text": "Dental cleaning copay: $35 with insurance",
+    "label": 1,
+    "tags": ["dental", "preventive", "healthcare"]
+  },
+  {
+    "text": "The sunrise from my balcony was absolutely stunning",
+    "label": 0,
+    "tags": ["nature", "morning", "beauty"]
+  },
+  {
+    "text": "Credit card cashback reward: $87.43 this quarter",
+    "label": 1,
+    "tags": ["credit-cards", "rewards", "cashback"]
+  },
+  {
+    "text": "Cooking class at community center starts next week",
+    "label": 0,
+    "tags": ["cooking", "education", "community"]
+  },
+  {
+    "text": "Pet grooming service: $65 for full spa treatment",
+    "label": 1,
+    "tags": ["pets", "grooming", "services"]
+  },
+  {
+    "text": "My neighbor's cat keeps visiting our yard",
+    "label": 0,
+    "tags": ["neighbors", "pets", "visiting"]
+  },
+  {
+    "text": "Retirement fund contribution: $500 monthly automatic",
+    "label": 1,
+    "tags": ["retirement", "savings", "investment"]
+  },
+  {
+    "text": "Evening thunderstorm brought much needed rain",
+    "label": 0,
+    "tags": ["weather", "nature", "relief"]
+  },
+  {
+    "text": "Amazon return refund: $23.99 for defective item",
+    "label": 1,
+    "tags": ["returns", "refund", "online-shopping"]
+  },
+  {
+    "text": "The kids' soccer season starts this weekend",
+    "label": 0,
+    "tags": ["children", "sports", "seasons"]
+  },
+  {
+    "text": "Mechanic charged $180 for oil change and inspection",
+    "label": 1,
+    "tags": ["automotive", "maintenance", "service"]
+  },
+  {
+    "text": "Finally organized my closet after months of procrastinating",
+    "label": 0,
+    "tags": ["organization", "home", "productivity"]
+  },
+  {
+    "text": "Twitch donation received: $25 from viewer for stream",
+    "label": 1,
+    "tags": ["streaming", "gaming", "donations"]
+  },
+  {
+    "text": "Bird watching group meets at dawn tomorrow",
+    "label": 0,
+    "tags": ["nature", "hobbies", "early-morning"]
+  },
+  {
+    "text": "Parking violation fine: $120 for expired meter",
+    "label": 1,
+    "tags": ["parking", "violation", "city-services"]
+  },
+  {
+    "text": "My sourdough bread turned out perfect this time",
+    "label": 0,
+    "tags": ["baking", "success", "homemade"]
+  },
+  {
+    "text": "Dividend payment from mutual fund: $156.78",
+    "label": 1,
+    "tags": ["investments", "dividends", "passive-income"]
+  },
+  {
+    "text": "The local theater is doing Shakespeare this month",
+    "label": 0,
+    "tags": ["theater", "culture", "entertainment"]
+  },
+  {
+    "text": "Carpet cleaning service: $200 for whole house",
+    "label": 1,
+    "tags": ["home-services", "cleaning", "maintenance"]
+  },
+  {
+    "text": "Planning a surprise party for mom's 60th birthday",
+    "label": 0,
+    "tags": ["family", "celebrations", "planning"]
+  },
+  {
+    "text": "Cryptocurrency mining payout: 0.025 BTC this month",
+    "label": 1,
+    "tags": ["cryptocurrency", "mining", "digital-currency"]
+  },
+  {
+    "text": "The autumn leaves are changing colors beautifully",
+    "label": 0,
+    "tags": ["nature", "seasons", "beauty"]
+  },
+  {
+    "text": "Electric bill spike: $340 due to heat wave usage",
+    "label": 1,
+    "tags": ["utilities", "seasonal", "high-usage"]
+  },
+  {
+    "text": "My meditation practice is finally becoming a habit",
+    "label": 0,
+    "tags": ["mindfulness", "habits", "self-improvement"]
+  },
+  {
+    "text": "Furniture delivery fee: $89 for white glove service",
+    "label": 1,
+    "tags": ["furniture", "delivery", "service-fee"]
+  },
+  {
+    "text": "The neighborhood kids are selling lemonade again",
+    "label": 0,
+    "tags": ["children", "entrepreneurship", "community"]
+  },
+  {
+    "text": "Wedding photographer deposit: $800 to secure booking",
+    "label": 1,
+    "tags": ["wedding", "photography", "services"]
+  },
+  {
+    "text": "Finished reading that book you recommended, loved it!",
+    "label": 0,
+    "tags": ["books", "recommendations", "gratitude"]
+  },
+  {
+    "text": "Lawn service monthly fee: $95 for mowing and edging",
+    "label": 1,
+    "tags": ["landscaping", "home-services", "monthly"]
+  },
+  {
+    "text": "Storm knocked down a tree in our front yard",
+    "label": 0,
+    "tags": ["weather", "property", "damage"]
+  },
+  {
+    "text": "Freelance design project: $1,200 for logo package",
+    "label": 1,
+    "tags": ["freelance", "design", "branding"]
+  },
+  {
+    "text": "The farmers market strawberries are incredibly sweet",
+    "label": 0,
+    "tags": ["food", "farmers-market", "seasonal"]
+  },
+  {
+    "text": "HOA monthly dues: $125 auto-payment processed",
+    "label": 1,
+    "tags": ["housing", "homeowners-association", "monthly"]
+  },
+  {
+    "text": "My yoga class is helping so much with flexibility",
+    "label": 0,
+    "tags": ["fitness", "yoga", "health-benefits"]
+  },
+  {
+    "text": "Babysitting payment: $60 for 4 hours last night",
+    "label": 1,
+    "tags": ["childcare", "services", "earnings"]
+  },
+  {
+    "text": "The local book store is having a poetry reading",
+    "label": 0,
+    "tags": ["literature", "events", "community"]
+  },
+  {
+    "text": "Annual membership renewal: $180 for warehouse club",
+    "label": 1,
+    "tags": ["membership", "shopping", "annual"]
+  },
+  {
+    "text": "My herb garden is producing more basil than I can use",
+    "label": 0,
+    "tags": ["gardening", "herbs", "abundance"]
+  },
+  {
+    "text": "Plumbing repair estimate: $450 for bathroom leak",
+    "label": 1,
+    "tags": ["home-repairs", "plumbing", "estimate"]
+  },
+  {
+    "text": "The city is installing new bike lanes on Main Street",
+    "label": 0,
+    "tags": ["infrastructure", "cycling", "city-planning"]
+  },
+  {
+    "text": "Quarterly tax payment: $2,800 to IRS",
+    "label": 1,
+    "tags": ["taxes", "quarterly", "self-employment"]
+  },
+  {
+    "text": "My morning run feels easier since I started training",
+    "label": 0,
+    "tags": ["fitness", "running", "progress"]
+  },
+  {
+    "text": "Dog training classes: $180 for 6-week program",
+    "label": 1,
+    "tags": ["pets", "training", "education"]
+  },
+  {
+    "text": "The community garden plots are all assigned for spring",
+    "label": 0,
+    "tags": ["community", "gardening", "planning"]
+  },
+  {
+    "text": "Subscription box charged: $29.99 monthly beauty box",
+    "label": 1,
+    "tags": ["subscriptions", "beauty", "monthly"]
+  },
+  {
+    "text": "My teenager got their first job at the ice cream shop",
+    "label": 0,
+    "tags": ["family", "teenagers", "first-job"]
+  },
+  {
+    "text": "Travel insurance refund: $145 for cancelled trip",
+    "label": 1,
+    "tags": ["travel", "insurance", "refund"]
+  },
+  {
+    "text": "The neighborhood block party planning meeting is tonight",
+    "label": 0,
+    "tags": ["community", "events", "planning"]
+  },
+  {
+    "text": "Music lessons payment: $80 for weekly piano class",
+    "label": 1,
+    "tags": ["music", "education", "lessons"]
+  },
+  {
+    "text": "Found a great hiking trail just 20 minutes from home",
+    "label": 0,
+    "tags": ["hiking", "discovery", "local"]
+  },
+  {
+    "text": "Appliance repair: $220 to fix the washing machine",
+    "label": 1,
+    "tags": ["appliances", "repairs", "home-maintenance"]
+  },
+  {
+    "text": "The sunrise yoga class in the park was incredible",
+    "label": 0,
+    "tags": ["yoga", "outdoors", "wellness"]
+  },
+  {
+    "text": "Birthday party catering deposit: $300 for next month",
+    "label": 1,
+    "tags": ["celebrations", "catering", "party-planning"]
+  },
+  {
+    "text": "My daughter's art project won first place at school",
+    "label": 0,
+    "tags": ["children", "art", "achievement"]
+  },
+  {
+    "text": "Cell phone upgrade fee: $35 activation charge",
+    "label": 1,
+    "tags": ["mobile", "upgrade", "technology"]
+  },
+  {
+    "text": "The neighborhood cats seem to have adopted our porch",
+    "label": 0,
+    "tags": ["animals", "neighbors", "unexpected-visitors"]
+  },
+  {
+    "text": "Spa day gift certificate: $250 for mom's birthday",
+    "label": 1,
+    "tags": ["gifts", "spa", "family"]
+  },
+  {
+    "text": "Finally learned to parallel park after 10 years of avoiding it",
+    "label": 0,
+    "tags": ["driving", "skills", "personal-growth"]
+  },
+  {
+    "text": "Professional headshots: $400 for business portraits",
+    "label": 1,
+    "tags": ["photography", "business", "professional"]
+  },
+  {
+    "text": "The local library is expanding their digital collection",
+    "label": 0,
+    "tags": ["library", "technology", "community-resources"]
+  },
+  {
+    "text": "Wine tasting event ticket: $65 per person",
+    "label": 1,
+    "tags": ["events", "wine", "entertainment"]
+  },
+  {
+    "text": "My sourdough starter is 3 years old and still going strong",
+    "label": 0,
+    "tags": ["baking", "longevity", "tradition"]
+  },
+  {
+    "text": "Custom artwork commission: $890 for oil painting",
+    "label": 1,
+    "tags": ["art", "commission", "custom-work"]
+  },
+  {
+    "text": "The meteor shower tonight should be spectacular",
+    "label": 0,
+    "tags": ["astronomy", "natural-phenomena", "excitement"]
+  },
+  {
+    "text": "Dental crown payment: $1,200 after insurance",
+    "label": 1,
+    "tags": ["dental", "major-procedure", "healthcare"]
+  },
+  {
+    "text": "Learning calligraphy through online tutorials, it's relaxing",
+    "label": 0,
+    "tags": ["art", "learning", "relaxation"]
+  },
+  {
+    "text": "Pool maintenance service: $150 monthly cleaning",
+    "label": 1,
+    "tags": ["home-services", "pool", "maintenance"]
+  },
+  {
+    "text": "The community theater needs volunteers for the next production",
+    "label": 0,
+    "tags": ["theater", "volunteering", "community"]
+  },
+  {
+    "text": "Wedding dress alteration: $180 for perfect fit",
+    "label": 1,
+    "tags": ["wedding", "clothing", "alterations"]
+  },
+  {
+    "text": "My morning meditation routine is becoming second nature",
+    "label": 0,
+    "tags": ["meditation", "routine", "mindfulness"]
+  },
+  {
+    "text": "Coding bootcamp tuition: $8,000 for 12-week program",
+    "label": 1,
+    "tags": ["education", "technology", "career-change"]
+  },
+  {
+    "text": "The neighborhood food festival is this weekend",
+    "label": 0,
+    "tags": ["food", "community", "events"]
+  },
+  {
+    "text": "Custom cake order: $120 for daughter's sweet 16",
+    "label": 1,
+    "tags": ["celebrations", "baking", "custom-order"]
+  },
+  {
+    "text": "Started a book club with coworkers, reading sci-fi novels",
+    "label": 0,
+    "tags": ["literature", "coworkers", "science-fiction"]
+  },
+  {
+    "text": "Mortgage extra payment: $500 toward principal this month",
+    "label": 1,
+    "tags": ["mortgage", "extra-payment", "financial-planning"]
+  },
+  {
+    "text": "The local farmers are harvesting pumpkins for Halloween",
+    "label": 0,
+    "tags": ["seasonal", "farming", "holidays"]
+  },
+  {
+    "text": "Personal trainer session: $75 for one hour",
+    "label": 1,
+    "tags": ["fitness", "personal-training", "health"]
+  },
+  {
+    "text": "My evening pottery class is teaching me patience",
+    "label": 0,
+    "tags": ["crafts", "pottery", "life-lessons"]
+  },
+  {
+    "text": "Software subscription renewal: $299 annually for design tools",
+    "label": 1,
+    "tags": ["software", "design", "professional-tools"]
+  },
+  {
+    "text": "The city installed new playground equipment at the park",
+    "label": 0,
+    "tags": ["community", "children", "improvements"]
+  },
+  {
+    "text": "Wedding venue final payment: $3,500 balance due",
+    "label": 1,
+    "tags": ["wedding", "venue", "final-payment"]
+  },
+  {
+    "text": "My vegetable garden produced 20 pounds of tomatoes",
+    "label": 0,
+    "tags": ["gardening", "harvest", "productivity"]
+  },
+  {
+    "text": "Annual eye exam copay: $45 with vision insurance",
+    "label": 1,
+    "tags": ["healthcare", "vision", "preventive"]
+  },
+  {
+    "text": "The autumn hiking trails are showing beautiful foliage",
+    "label": 0,
+    "tags": ["hiking", "autumn", "nature"]
+  },
+  {
+    "text": "Food delivery tip: $8 for excellent service in the rain",
+    "label": 1,
+    "tags": ["food-delivery", "tip", "appreciation"]
+  },
+  {
+    "text": "My grandmother's recipe collection is a treasure trove",
+    "label": 0,
+    "tags": ["family", "cooking", "heritage"]
+  },
+  {
+    "text": "Massage therapy session: $95 for deep tissue work",
+    "label": 1,
+    "tags": ["wellness", "massage", "self-care"]
+  },
+  {
+    "text": "The neighbor's dog learned a new trick, so impressive!",
+    "label": 0,
+    "tags": ["pets", "neighbors", "training"]
+  },
+  {
+    "text": "Business license fee: $225 for annual renewal",
+    "label": 1,
+    "tags": ["business", "licensing", "annual"]
+  },
+  {
+    "text": "Started learning watercolor painting, it's challenging but fun",
+    "label": 0,
+    "tags": ["art", "learning", "watercolor"]
+  },
+  {
+    "text": "Childcare deposit: $400 for daycare enrollment",
+    "label": 1,
+    "tags": ["childcare", "deposit", "education"]
+  },
+  {
+    "text": "The community center offers free computer classes",
+    "label": 0,
+    "tags": ["community", "education", "technology"]
+  },
+  {
+    "text": "Property management fee: $150 monthly for rental",
+    "label": 1,
+    "tags": ["real-estate", "management", "monthly"]
+  },
+  {
+    "text": "My morning bird watching routine brings such peace",
+    "label": 0,
+    "tags": ["nature", "birds", "peaceful"]
+  },
+  {
+    "text": "Dance lessons payment: $120 for ballroom basics",
+    "label": 1,
+    "tags": ["dance", "lessons", "ballroom"]
+  },
+  {
+    "text": "The local bookstore cat has become a neighborhood celebrity",
+    "label": 0,
+    "tags": ["books", "cats", "community"]
+  },
+  {
+    "text": "Kitchen renovation deposit: $5,000 to start project",
+    "label": 1,
+    "tags": ["home-improvement", "kitchen", "renovation"]
+  },
+  {
+    "text": "My evening walks help me unwind after work",
+    "label": 0,
+    "tags": ["walking", "relaxation", "routine"]
+  },
+  {
+    "text": "Professional development course: $450 for certification",
+    "label": 1,
+    "tags": ["education", "professional", "certification"]
+  },
+  {
+    "text": "The sunrise from the mountain trail was worth the early start",
+    "label": 0,
+    "tags": ["hiking", "sunrise", "reward"]
+  },
+  {
+    "text": "Storage unit rental: $85 monthly for extra space",
+    "label": 1,
+    "tags": ["storage", "rental", "monthly"]
+  },
+  {
+    "text": "My teenager's band played their first gig last night",
+    "label": 0,
+    "tags": ["music", "teenagers", "milestone"]
+  },
+  {
+    "text": "Wedding flowers deposit: $600 for bridal arrangements",
+    "label": 1,
+    "tags": ["wedding", "flowers", "arrangements"]
+  },
+  {
+    "text": "The neighborhood watch group is organizing safety workshops",
+    "label": 0,
+    "tags": ["community", "safety", "education"]
+  },
+  {
+    "text": "Quarterly insurance premium: $380 for auto coverage",
+    "label": 1,
+    "tags": ["insurance", "auto", "quarterly"]
+  },
+  {
+    "text": "My herb tea blend experiments are finally getting somewhere",
+    "label": 0,
+    "tags": ["herbs", "tea", "experimentation"]
+  },
+  {
+    "text": "Art supply order: $156 for new watercolor paints",
+    "label": 1,
+    "tags": ["art-supplies", "watercolor", "hobby"]
+  },
+  {
+    "text": "The old oak tree in our yard is showing signs of spring",
+    "label": 0,
+    "tags": ["nature", "trees", "seasons"]
+  },
+  {
+    "text": "Veterinary surgery: $2,400 for dog's hip replacement",
+    "label": 1,
+    "tags": ["veterinary", "surgery", "pet-care"]
+  },
+  {
+    "text": "Learning to identify bird calls on my nature walks",
+    "label": 0,
+    "tags": ["nature", "birds", "learning"]
+  },
+  {
+    "text": "Monthly charitable giving: $200 to local food bank",
+    "label": 1,
+    "tags": ["charity", "monthly", "community-support"]
+  },
+  {
+    "text": "The library's summer reading program starts next week",
+    "label": 0,
+    "tags": ["library", "reading", "summer"]
+  },
+  {
+    "text": "Home security system: $49 monthly monitoring fee",
+    "label": 1,
+    "tags": ["security", "home", "monthly"]
+  },
+  {
+    "text": "My sourdough pizza dough recipe is finally perfected",
+    "label": 0,
+    "tags": ["baking", "pizza", "recipe-development"]
+  },
+  {
+    "text": "Financial advisor consultation: $300 for retirement planning",
+    "label": 1,
+    "tags": ["financial-planning", "retirement", "consultation"]
+  },
+  {
+    "text": "The community garden is hosting a harvest festival",
+    "label": 0,
+    "tags": ["community", "garden", "festival"]
+  },
+  {
+    "text": "Roof repair emergency: $1,200 after storm damage",
+    "label": 1,
+    "tags": ["home-repairs", "emergency", "weather-damage"]
+  },
+  {
+    "text": "My morning yoga practice is becoming a cherished ritual",
+    "label": 0,
+    "tags": ["yoga", "morning", "ritual"]
+  },
+  {
+    "text": "Language learning app: $79.99 annual subscription",
+    "label": 1,
+    "tags": ["education", "languages", "apps"]
+  },
+  {
+    "text": "The neighborhood kids built an incredible snow fort",
+    "label": 0,
+    "tags": ["children", "winter", "creativity"]
+  },
+  {
+    "text": "Custom furniture order: $2,800 for handmade dining set",
+    "label": 1,
+    "tags": ["furniture", "custom", "handmade"]
+  },
+  {
+    "text": "My evening stargazing sessions help me feel connected to the universe",
+    "label": 0,
+    "tags": ["astronomy", "evening", "connection"]
+  },
+  {
+    "text": "Professional consultation: $250 for legal advice",
+    "label": 1,
+    "tags": ["legal", "consultation", "professional"]
+  },
+  {
+    "text": "The local farmers market musician plays beautiful folk songs",
+    "label": 0,
+    "tags": ["music", "farmers-market", "folk"]
+  },
+  {
+    "text": "Subscription service refund: $42.99 for unused months",
+    "label": 1,
+    "tags": ["subscriptions", "refund", "unused"]
+  },
+  {
+    "text": "My weekend pottery projects are finally looking like actual bowls",
+    "label": 0,
+    "tags": ["pottery", "progress", "crafts"]
+  },
+  {
+    "text": "Emergency fund transfer: $1,000 for unexpected car repair",
+    "label": 1,
+    "tags": ["emergency", "savings", "automotive"]
+  },
+  {
+    "text": "The sunrise hot air balloon rides look magical from our backyard",
+    "label": 0,
+    "tags": ["hot-air-balloons", "sunrise", "magical"]
+  },
+  {
+    "text": "Wedding cake tasting fee: $50 refundable with order",
+    "label": 1,
+    "tags": ["wedding", "cake", "tasting"]
+  },
+  {
+    "text": "My herb spiral garden design is attracting so many beneficial insects",
+    "label": 0,
+    "tags": ["gardening", "herbs", "beneficial-insects"]
+  },
+  {
+    "text": "Annual vehicle registration: $165 for license renewal",
+    "label": 1,
+    "tags": ["vehicle", "registration", "annual"]
+  },
+  {
+    "text": "The neighborhood book exchange box is always full of great finds",
+    "label": 0,
+    "tags": ["books", "community", "sharing"]
+  },
+  {
+    "text": "Professional cleaning service: $280 for deep spring cleaning",
+    "label": 1,
+    "tags": ["cleaning", "spring", "professional"]
+  },
+  {
+    "text": "My morning meditation corner by the window brings such clarity",
+    "label": 0,
+    "tags": ["meditation", "morning", "clarity"]
+  }
+]
