@@ -6,11 +6,13 @@ authors = [
     {name = "tonible14012002",email = "namanh14.work@gmail.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<4.0"
 dependencies = [
     "transformers[torch] (>=4.56.1,<5.0.0)",
     "pydantic (>=2.11.7,<3.0.0)",
-    "scikit-learn (>=1.7.1,<2.0.0)"
+    "scikit-learn (>=1.7.1,<2.0.0)",
+    "pydantic-settings (>=2.10.1,<3.0.0)",
+    "huggingface-hub (>=0.34.4,<0.35.0)"
 ]
 
 [build-system]
@@ -28,4 +30,7 @@ peft = "^0.17.1"
 datasets = "^4.0.0"
 huggingface-hub = "^0.34.4"
 evaluate = "^0.4.5"
-"scikit-learn (>=1.7.1,<2.0.0)"
+llama-index = "^0.14.0"
+scikit-learn = "^1.7.2"
+instructor = "^1.11.2"
+litellm = "^1.76.3"
