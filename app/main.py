@@ -9,11 +9,16 @@ from fastapi.responses import ORJSONResponse
 from starlette.exceptions import HTTPException
 
 from app.api.dependencies import api_key_auth
+from app.api.routes import health, workflow
 from app.core.settings import settings
+from app.core import services
+
+from src.payment_classifier.llm.litellm import LiteLLMProvider
+from src.payment_classifier.llm.settings import LLMSettings
+from src.payment_classifier.prompts import InmemoryPromptManager
 
 logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL))
 logger = logging.getLogger(__name__)
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -24,9 +29,34 @@ async def lifespan(app: FastAPI):
     # Store settings in app state
     app.state.settings = settings
 
-    logger.info(f"Environment: {settings.ENVIRONMENT}")
-    logger.info(f"Teacher model: {settings.TEACHER_MODEL}")
-    logger.info(f"Student model path: {settings.STUDENT_MODEL_PATH}")
+    teacher_llm = LiteLLMProvider(LLMSettings(
+        llm_model_name="gpt-4.1",
+        api_key=settings.OPENAI_API_KEY,
+        temperature=0.7,
+        num_retries=2,
+    ))
+
+    prompt_mgr = InmemoryPromptManager()
+
+    logger.info("Initializing data manager...")
+    data_manager = services.DataManager()
+
+    logger.info("Initializing data generator...")
+    data_generator = services.DataGenerator(
+        llm=teacher_llm,
+        prompt_mgr=prompt_mgr,
+        data_manager=data_manager,
+    )
+
+    trainer_service =  services.TrainerService(
+        base_model="prajjwal1/bert-tiny"
+        
+    )
+
+    app.state.data_manager = data_manager
+    app.state.data_generator = data_generator
+    app.state.prompt_mgr = prompt_mgr
+    app.state.trainer_service = trainer_service
 
     yield  # The app runs here
 
@@ -81,66 +111,9 @@ app.add_exception_handler(HTTPException, http_exception_handler)
 app.add_exception_handler(Exception, unhandled_exception_handler)
 app.add_exception_handler(RequestValidationError, request_validation_exception_handler)
 
-
-# Root endpoint
-@app.get("/")
-async def root():
-    """Root endpoint."""
-    return {"message": "Fine-tuning Workflow API", "version": "1.0.0"}
-
-
-# Health check endpoint
-@app.get("/health-check")
-async def health_check():
-    """Health check endpoint."""
-    return {
-        "status": "healthy",
-        "environment": settings.ENVIRONMENT,
-        "teacher_model": settings.TEACHER_MODEL,
-        "student_model_path": settings.STUDENT_MODEL_PATH
-    }
-
-
-# Workflow endpoints
-@app.post("/workflow/generate-data")
-async def generate_synthetic_data():
-    """Generate synthetic training data."""
-    return {"message": "Data generation started", "status": "in_progress"}
-
-
-@app.post("/workflow/train")
-async def train_student_model():
-    """Train the student model with curated data."""
-    return {"message": "Training started", "status": "in_progress"}
-
-
-@app.post("/workflow/evaluate")
-async def evaluate_model():
-    """Evaluate model performance on dev/test sets."""
-    return {"message": "Evaluation started", "status": "in_progress"}
-
-
-@app.get("/workflow/status")
-async def get_workflow_status():
-    """Get current workflow status."""
-    return {
-        "status": "idle",
-        "current_loop": 0,
-        "total_examples": 0,
-        "last_f1_score": None
-    }
-
-
-@app.get("/workflow/metrics")
-async def get_metrics():
-    """Get training metrics and performance history."""
-    return {
-        "loops_completed": 0,
-        "total_examples_generated": 0,
-        "current_f1_score": None,
-        "best_f1_score": None,
-        "training_history": []
-    }
+# Include routers
+app.include_router(health.router)
+app.include_router(workflow.router)
 
 
 if __name__ == "__main__":

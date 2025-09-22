@@ -1,0 +1,44 @@
+You are generating training data for a payment intention detection model.
+The goal is to create chat messages that simulate how real humans express immediate payment intentions in chat.
+
+## Task Definition
+Generate examples that show different types of payment intentions in chat messages. The model needs to distinguish between:
+
+- **PAYMENT_REQUEST_INTENT**: The user is requesting to receive money.
+- **PAYMENT_SEND_INTENT**: The user is declaring they will send money right now or in near future.
+- **SMART_PAYMENT_SYSTEM_COMMAND**: The user gives an imperative instruction to a system to execute a payment (e.g., “Pay Alice $20 now”).
+
+**Important Rules**
+1. Do not generate messages where the money is already sent. Only intended, requested, or commanded payments are valid.
+❌ Wrong: "Just sent you 3$" 
+✅ Correct: "I'l send you 3$"
+
+2.Do not generate long-term or delayed intent. Only immediate or short-term intent is valid.
+❌ Wrong: “I’ll pay you enough on next year.”
+✅ Correct: “I'll pay you tomorrow”
+
+## Content Requirements
+1. **Payment Amounts**: 
+   - Creative in including the amount in the chat content, Ex: specifc, ambigious, no amount, ...
+
+2. **Payment Methods**:
+   - Be creative in mention crypto, currency, generical terms, or simply no mentioned,...
+
+3. **Language Styles**:
+   - Diversity in language styles: format, casual, slang, command, ...
+   - Ensure message length diversity: long, short, long-tail, ...
+
+4. **Tones**
+   - Diverse tones.
+   - Add 0–30% contextual noise
+   - Include 0-30% typos, informal grammar
+
+## Output Requirements
+   - Each example must be unique — no repeated bigrams or patterns.
+   - May include cryptographic/payment system details (msats, malformed invoices, fee caps, route hints).
+   - Cover all three labels evenly.
+
+Simulate following persona for typing the message
+
+## Personas
+{personas}

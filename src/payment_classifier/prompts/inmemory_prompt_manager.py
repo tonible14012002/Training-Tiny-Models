@@ -1,4 +1,5 @@
 from typing import Dict
+from pathlib import Path
 from .base import BasePromptManager
 from .constant import (
     payment_intent_prompt,
@@ -41,7 +42,12 @@ class InmemoryPromptManager(BasePromptManager):
         Raises:
             KeyError: If the prompt_key is not found
         """
-        if prompt_key not in self._prompts:
-            raise KeyError(f"Prompt key '{prompt_key}' not found")
+        if prompt_key in self._prompts:
+            return self._prompts[prompt_key]
+        # Find files inside folder app/core/prompts with given prompt_key
+        prompt_file = "app/core/prompts/" + f"{prompt_key}.txt"
+        if Path(prompt_file).exists():
+            with open(prompt_file, "r") as f:
+                return f.read()
         
-        return self._prompts[prompt_key]
+        raise KeyError(f"Prompt key '{prompt_key}' not found")
