@@ -25,7 +25,10 @@ class DataGenerator:
     async def fresh_gen(self, human_seeds: List[Sample]) -> List[Sample]:
         # First iterate
         results = await self._gen(human_seeds)
-        filted_result = await self.data_manager._deduplicate(results)
+        
+        print(results[0])
+
+        filted_result = await self.data_manager.deduplicate(results)
         self.data_manager.save(filted_result)
 
         for _ in range(self.NUMBER_PER_ITER):

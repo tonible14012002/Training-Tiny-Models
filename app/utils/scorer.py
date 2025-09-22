@@ -20,11 +20,3 @@ class EvaluationUtils:
             rouge_type=rouge_type
         )
         return await scorer.single_turn_ascore(sample)
-    
-    # @staticmethod
-    # async def score_cosine_sim(
-    #     ref: str,
-    #     pred: str
-    # ) -> float:
-    #     # Implement cosine similarity scoring logic here
-    #     pass

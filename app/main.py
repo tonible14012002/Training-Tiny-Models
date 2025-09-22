@@ -10,7 +10,7 @@ from starlette.exceptions import HTTPException
 
 from app.api.dependencies import api_key_auth
 from app.api.routes import health, workflow
-from app.core.settings import settings
+from app.core.settings import settings, RELOAD_DIRS
 from app.core import services
 
 from src.payment_classifier.llm.litellm import LiteLLMProvider
@@ -50,7 +50,6 @@ async def lifespan(app: FastAPI):
 
     trainer_service =  services.TrainerService(
         base_model="prajjwal1/bert-tiny"
-        
     )
 
     app.state.data_manager = data_manager
@@ -121,5 +120,6 @@ if __name__ == "__main__":
         "main:app",
         host="0.0.0.0",
         port=8000,
-        reload=settings.ENVIRONMENT == "dev"
+        reload=settings.ENVIRONMENT == "dev",
+        reload_dirs=RELOAD_DIRS,
     )

@@ -14,13 +14,17 @@ router = APIRouter(prefix="/workflow", tags=["workflow"])
 @router.post("/generate-data")
 async def generate_synthetic_data(request: Request):
     data_generator: services.DataGenerator = request.app.state.data_generator
-    path = "seed/human_seed.json"
+    path = ".cache/human_seed.json"
     # load text from json file
     with open(path, "r") as f:
         seed_data = json.load(f)
     logger.info(f"Loaded {len(seed_data)} seed examples from {path}")
+    converted = [
+        {**seed, 'label': schemas.PAYMENT_LABEL.to_str(seed['label'])}
+        for seed in seed_data
+    ]
 
-    human_seeds = TypeAdapter(List[schemas.Sample]).validate_python(seed_data)
+    human_seeds = TypeAdapter(List[schemas.Sample]).validate_python(converted)
     await data_generator.fresh_gen(human_seeds)
 
     return {"message": "Data generation started", "status": "in_progress"}
@@ -31,10 +35,11 @@ async def train_student_model(request: Request):
     trainer_service: services.TrainerService = request.app.state.trainer_service
 
     ds = data_manager.to_datasets()
+    await trainer_service.train(ds)
 
-
-    return {"message": "Training started", "status": "in_progress"}
-
+    return {
+        "status": "training"
+    }
 
 @router.post("/evaluate")
 async def evaluate_model():

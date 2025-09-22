@@ -64,6 +64,6 @@ if __name__ == "__main__":
 
     # save to files
     import json
-    os.makedirs("seed", exist_ok=True)
-    with open("seed/human_seed.json", "w") as f:
+    os.makedirs(".seed", exist_ok=True)
+    with open(".cache/human_seed.json", "w") as f:
         json.dump(msgs, f, indent=2, ensure_ascii=False)

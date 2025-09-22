@@ -1,4 +1,8 @@
 
+export PYTHONPATH=./
+
 start:
-	export PYTHONPATH="./"
-	uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+	python app/main.py
+
+run-cmd:
+	python cmd/$(file).py
