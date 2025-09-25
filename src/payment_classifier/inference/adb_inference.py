@@ -95,7 +95,7 @@ class ADBModelInference:
         return predicted_labels, outputs
 
     def calc_adb(self, data: Dataset):
-        confidence_ratio = 0.95  # For radius calculation
+        confidence_ratio = 0.9  # For radius calculation
         batch_size = 32
         # Get the embedding dimension from the model
         embedding_dim = self.peft_model.config.hidden_size
@@ -210,3 +210,122 @@ class ADBModelInference:
             predictions.append(predicted_label)
 
         return predictions
+
+    def evaluate_with_adb(self, data: Dataset) -> dict:
+        """Evaluate model performance using ADB on a dataset with ground truth labels."""
+        self.check_adb()
+        assert self.intent_centers is not None and self.intent_radii is not None, (
+            "ADB parameters not loaded. Please ensure ADB data was properly calculated and saved."
+        )
+
+        batch_size = 32
+        all_predictions = []
+        all_true_labels = []
+
+        # Process in batches
+        for i in range(0, len(data), batch_size):
+            batch = data[i:i+batch_size]
+            texts = batch['msg']
+            true_labels = batch['label']
+
+            # Get predictions for this batch
+            predictions = self.predict_with_adb(texts)
+
+            all_predictions.extend(predictions)
+            all_true_labels.extend(true_labels)
+
+        # Calculate metrics
+        correct = 0
+        unknown_predictions = 0
+
+        # For precision/recall/F1 calculation
+        true_positives = defaultdict(int)
+        false_positives = defaultdict(int)
+        false_negatives = defaultdict(int)
+        label_stats = defaultdict(lambda: {"correct": 0, "total": 0, "unknown": 0})
+
+        for pred, true_label in zip(all_predictions, all_true_labels):
+            true_label_str = self.id2label[true_label]
+            pred_label = pred["label"]
+
+            label_stats[true_label_str]["total"] += 1
+
+            if pred_label == "Unknown":
+                unknown_predictions += 1
+                label_stats[true_label_str]["unknown"] += 1
+                # Unknown predictions count as false negatives for the true label
+                false_negatives[true_label_str] += 1
+            elif pred_label == true_label_str:
+                correct += 1
+                label_stats[true_label_str]["correct"] += 1
+                true_positives[pred_label] += 1
+            else:
+                # Wrong prediction: false positive for predicted label, false negative for true label
+                false_positives[pred_label] += 1
+                false_negatives[true_label_str] += 1
+
+        # Calculate overall metrics
+        total_samples = len(all_predictions)
+        accuracy = correct / total_samples if total_samples > 0 else 0.0
+        unknown_rate = unknown_predictions / total_samples if total_samples > 0 else 0.0
+        coverage = (total_samples - unknown_predictions) / total_samples if total_samples > 0 else 0.0
+
+        # Calculate per-label metrics including precision, recall, F1
+        per_label_metrics = {}
+        all_labels = set(self.id2label.values())
+
+        macro_precision_sum = 0
+        macro_recall_sum = 0
+        macro_f1_sum = 0
+        valid_labels = 0
+
+        for label in all_labels:
+            if label_stats[label]["total"] > 0:
+                tp = true_positives[label]
+                fp = false_positives[label]
+                fn = false_negatives[label]
+
+                precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+                recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+                f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+
+                per_label_metrics[label] = {
+                    "accuracy": label_stats[label]["correct"] / label_stats[label]["total"],
+                    "coverage": (label_stats[label]["total"] - label_stats[label]["unknown"]) / label_stats[label]["total"],
+                    "precision": precision,
+                    "recall": recall,
+                    "f1_score": f1,
+                    "samples": label_stats[label]["total"],
+                    "true_positives": tp,
+                    "false_positives": fp,
+                    "false_negatives": fn
+                }
+
+                macro_precision_sum += precision
+                macro_recall_sum += recall
+                macro_f1_sum += f1
+                valid_labels += 1
+
+        # Calculate macro averages
+        macro_precision = macro_precision_sum / valid_labels if valid_labels > 0 else 0.0
+        macro_recall = macro_recall_sum / valid_labels if valid_labels > 0 else 0.0
+        macro_f1 = macro_f1_sum / valid_labels if valid_labels > 0 else 0.0
+
+        return {
+            "overall": {
+                "accuracy": accuracy,
+                "coverage": coverage,
+                "unknown_rate": unknown_rate,
+                "macro_precision": macro_precision,
+                "macro_recall": macro_recall,
+                "macro_f1": macro_f1,
+                "total_samples": total_samples,
+                "correct_predictions": correct,
+                "unknown_predictions": unknown_predictions
+            },
+            "per_label": per_label_metrics,
+            "adb_info": {
+                "radii": self.intent_radii,
+                "labels": self.id2label
+            }
+        }

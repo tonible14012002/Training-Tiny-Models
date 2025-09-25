@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Literal
+from typing import List, Literal, Optional, Dict, Any
 from enum import Enum
 
 class Sample(BaseModel):
@@ -7,7 +7,8 @@ class Sample(BaseModel):
     label: Literal[
         "payment_intent",
         "payment_request",
-        "smart_payment_system_command"
+        "smart_payment_system_command",
+        "open_intent"
     ]
 
 class Result(BaseModel):
@@ -55,3 +56,15 @@ class PAYMENT_LABEL:
             return "smart_payment_system_command"
         else:
             raise ValueError(f"Unknown label: {label}")
+
+class EvaluationRequest(BaseModel):
+    iteration_number: Optional[int] = None
+    include_test_cases: bool = False
+    include_open_intent: bool = True
+
+class EvaluationResponse(BaseModel):
+    message: str
+    status: str
+    checkpoint_path: str
+    evaluation_data_info: Dict[str, Any]
+    results: Dict[str, Any]

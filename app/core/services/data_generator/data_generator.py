@@ -15,8 +15,8 @@ class DataGenerator:
     NUMBER_PER_ITER = 15
     MAX_GEN_PER_ITER = 25
 
-    SEED_PROMPT_KEY = "seed"
-    EVAL_PROMPT_KEY = "eval_seed"
+    SEED_PROMPT_KEY = "train/seed"
+    EVAL_PROMPT_KEY = "eval/eval_seed"
     NUMBER_EVAL_PER_ITER = 10
     MAX_GEN_EVAL_PER_ITER = 20
 
@@ -29,11 +29,14 @@ class DataGenerator:
 
     async def fresh_gen(self, human_seeds: List[Sample]) -> List[Sample]:
         # First iterate
-        results = await self._gen(human_seeds)
+        seed_examples = random.sample(human_seeds, k=min(len(human_seeds), 2))
+        results = await self._gen(seed_examples)
 
+        # Deduplicate initial results
         filted_result = await self.data_manager.deduplicate(results)
         self.data_manager.save(filted_result)
 
+        # Subsequent batches
         for _ in range(self.NUMBER_PER_ITER - 1):
             # Make new seed
             new_seed = random.sample(results, k=min(len(results), 2))
@@ -54,12 +57,15 @@ class DataGenerator:
         seed_rd = random.randint(0, 1000)
         personas = self.personas_ds["train"].shuffle(seed=seed_rd).select(range(self.MAX_GEN_PER_ITER))
         personas_txt = "\n- ".join([p['persona'] for p in personas])
-        
+
+        seed_examples_txt = "\n".join([f"- {s.text}" for s in seed])
         prompt = self.prompt_mgr.get_prompt(self.SEED_PROMPT_KEY).format(personas=personas_txt)
+
+        user_input = f"## Examples: {seed_examples_txt} \nContinue generate {self.NUMBER_PER_ITER} diverse examples"
 
         data = (await self.llm.generate_structured_output([
             {"role": "system", "content": prompt},
-            {"role": "user", "content": f"generate {self.NUMBER_PER_ITER} diverse examples"}
+            {"role": "user", "content": user_input}
         ], Result)).messages
 
         return data

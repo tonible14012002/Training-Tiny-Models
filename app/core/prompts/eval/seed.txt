@@ -17,26 +17,25 @@ Generate examples that show different types of payment intentions in chat messag
 ❌ Wrong: “I’ll pay you enough on next year.”
 ✅ Correct: “I'll pay you tomorrow”
 
-## Content Requirements
-1. **Payment Amounts**: 
-   - Creative in including the amount in the chat content, Ex: specifc, ambigious, no amount, ...
+3. Include these kind of messages
+- simple (should take up 50% of the dataset) message that frequently (or likely) appear in everyday chat, can be from any type of person.
+- Medium - message that also everyday message but with more persona related
+- Hard - message that only appear in some specific condition, personsa (such as tech related, academic, ...)
+- Extremely - message that only appear by some personas, undersome special condition that it not occur everyday.
 
-2. **Payment Methods**:
-   - Be creative in mention crypto, currency, generical terms, or simply no mentioned,...
+Example:
+- "Can you send me money?" (simple)
+- "Send me cash please" (simple)
+- "I'll send you money" (Simple)
+- "Pay Sarah $15" (Simple)
 
-3. **Language Styles**:
-   - Diversity in language styles: format, casual, slang, command, ...
-   - Ensure message length diversity: very-shot (less than 5 words), short, long (10 words), long-tail message, ...
+- "mind sending me gas money? broke rn (Medium)
+- "sending you rent money this evening" (Medium)
+- "Send $40 to roommate for utilities" (Medium)
 
-4. **Tones**
-   - Diverse tones.
-   - Add 0–30% contextual noise
-   - Include 0-30% typos, informal grammar
-
-## Output Requirements
-   - Each example must be unique — no repeated bigrams or patterns.
-   - May include cryptographic/payment system details (msats, malformed invoices, fee caps, route hints).
-   - Cover all three labels evenly.
+- "Mind covering the co-pay? Insurance is being difficult" (Hard)
+- "Process ACH transfer $5000 to supplier account" (Hard)
+- "Could you advance me funds for the conference registration?" (Hard)
 
 Simulate following persona for typing the message
 

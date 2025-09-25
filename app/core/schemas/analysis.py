@@ -1,129 +1,109 @@
 from pydantic import BaseModel
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Any
 from .workflow import Sample
 
 class Prediction(BaseModel):
-    text: str
-    predicted_label: str
-    confidence: float
-    label_probabilities: Dict[str, float]
-    original_sample: Optional[Sample] = None
-    sample_index: Optional[int] = None
+    label: str
+    prob: float
+    dis: Optional[float] = None  # Distance for ADB
+    closest: Optional[str] = None  # For unknown predictions
 
-class PerformanceReport(BaseModel):
+class TestCase(BaseModel):
+    input: Sample
+    true_label: str
+    prediction: Optional[Prediction] = None
+
+class LabelMetrics(BaseModel):
     accuracy: float
-    f1_scores: Dict[str, float]  # per-label F1
+    coverage: float
+    precision: float
+    recall: float
+    f1_score: float
+    samples: int
+    true_positives: int
+    false_positives: int
+    false_negatives: int
+
+class OverallMetrics(BaseModel):
+    accuracy: float
+    coverage: float
+    unknown_rate: float
+    macro_precision: float
+    macro_recall: float
     macro_f1: float
-    weighted_f1: float
-    confusion_matrix: Dict[str, Dict[str, int]]
     total_samples: int
     correct_predictions: int
+    unknown_predictions: int
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "accuracy": 0.85,
-                "f1_scores": {
-                    "payment_intent": 0.87,
-                    "payment_request": 0.82,
-                    "smart_payment_system_command": 0.90
-                },
-                "macro_f1": 0.86,
-                "weighted_f1": 0.85,
-                "confusion_matrix": {
-                    "payment_intent": {"payment_intent": 45, "payment_request": 3, "smart_payment_system_command": 2},
-                    "payment_request": {"payment_intent": 2, "payment_request": 38, "smart_payment_system_command": 1},
-                    "smart_payment_system_command": {"payment_intent": 1, "payment_request": 0, "smart_payment_system_command": 48}
-                },
-                "total_samples": 140,
-                "correct_predictions": 119
-            }
-        }
+class MisclassifiedOpenIntent(BaseModel):
+    text: str
+    predicted_as: str
+    confidence: float
+    distance: float
 
-class LowConfidenceSample(BaseModel):
-    sample: Sample
-    prediction: Prediction
-    confidence_gap: float  # difference between top 2 predictions
+class OpenIntentAnalysis(BaseModel):
+    total_samples: int
+    detected_as_unknown: int
+    unknown_rate: float
+    false_positive_rate: float
+    misclassified: List[MisclassifiedOpenIntent]
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "sample": {"msg": "Can you help me send money?", "label": "payment_intent"},
-                "prediction": {
-                    "text": "Can you help me send money?",
-                    "predicted_label": "payment_request",
-                    "confidence": 0.52,
-                    "label_probabilities": {
-                        "payment_intent": 0.48,
-                        "payment_request": 0.52,
-                        "smart_payment_system_command": 0.00
-                    }
-                },
-                "confidence_gap": 0.04
-            }
-        }
+class EvaluationResult(BaseModel):
+    overall: OverallMetrics
+    per_label: Dict[str, LabelMetrics]
+    adb_info: Optional[Dict[str, Any]] = None
+    test_cases: Optional[List[TestCase]] = None
+    open_intent_analysis: Optional[OpenIntentAnalysis] = None
 
-class ErrorAnalysis(BaseModel):
-    total_errors: int
-    error_rate: float
-    confusion_patterns: Dict[str, List[str]]  # actual -> list of predicted labels
-    most_confused_pairs: List[Tuple[str, str]]  # (actual, predicted) pairs with highest confusion
-    error_samples: List[LowConfidenceSample]  # actual error samples for review
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "total_errors": 21,
-                "error_rate": 0.15,
-                "confusion_patterns": {
-                    "payment_intent": ["payment_request", "smart_payment_system_command"],
-                    "payment_request": ["payment_intent"],
-                    "smart_payment_system_command": ["payment_intent"]
-                },
-                "most_confused_pairs": [
-                    ("payment_intent", "payment_request"),
-                    ("payment_request", "payment_intent")
-                ],
-                "error_samples": []
-            }
-        }
+class ErrorBucket(BaseModel):
+    name: str
+    description: Optional[str] = None
+    approach: str  # The strategy to overcome this error
+    example_issue: Optional[str] = None  # Example of the error manifestation
+    data_generation_strategy: Optional[str] = None  # Specific data generation approach
 
-class ConfidenceAnalysis(BaseModel):
-    low_confidence_samples: List[LowConfidenceSample]
-    confidence_threshold: float
-    avg_confidence: float
-    confidence_distribution: Dict[str, int]  # confidence ranges -> count
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "low_confidence_samples": [],
-                "confidence_threshold": 0.8,
-                "avg_confidence": 0.87,
-                "confidence_distribution": {
-                    "0.0-0.2": 2,
-                    "0.2-0.4": 5,
-                    "0.4-0.6": 8,
-                    "0.6-0.8": 15,
-                    "0.8-1.0": 110
-                }
-            }
-        }
-
-class ModelAnalysisReport(BaseModel):
-    performance: PerformanceReport
-    confidence_analysis: ConfidenceAnalysis
-    error_analysis: ErrorAnalysis
-    model_checkpoint: str
-    evaluation_timestamp: str
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "performance": {},
-                "confidence_analysis": {},
-                "error_analysis": {},
-                "model_checkpoint": "3",
-                "evaluation_timestamp": "2024-09-23T10:30:00Z"
-            }
-        }
+EXAMPLE_ERROR_BUCKETS = [
+    ErrorBucket(
+        name="Over reliance on keywords",
+        description="The model relies too heavily on specific keywords and misses the overall context of the message.",
+        approach="Generate diverse examples with varied vocabulary and synonyms to reduce keyword dependency",
+        example_issue="Model classifies 'transfer money' as payment_intent but misses 'send funds' with same intent",
+        data_generation_strategy="Create examples using synonyms, paraphrasing, and different linguistic expressions for same intent"
+    ),
+    ErrorBucket(
+        name="Over focusing on unrelated word",
+        description="The model attends to an unrelated word that might not related to the actual intent.",
+        approach="Generate examples with distracting words to improve context understanding",
+        example_issue="Model focuses on 'payment' in 'payment reminder' and classifies as payment_intent instead of payment_request",
+        data_generation_strategy="Include examples with potentially confusing words in different contexts"
+    ),
+    ErrorBucket(
+        name="Miss focus on important word",
+        description="The model fails to attend to an important word that is crucial for determining the intent.",
+        approach="Generate examples that emphasize critical intent-determining words in various contexts",
+        example_issue="Model misses 'request' in 'I request payment' and classifies as payment_intent",
+        data_generation_strategy="Create examples highlighting key intent words in different sentence positions"
+    ),
+    ErrorBucket(
+        name="Ambiguous intent",
+        description="The input message is ambiguous and could reasonably be interpreted as having multiple intents.",
+        approach="Generate clearer, more explicit examples to establish stronger intent boundaries",
+        example_issue="'Can you handle the payment?' could be payment_request or smart_payment_system_command",
+        data_generation_strategy="Create unambiguous examples with clear intent signals and context"
+    ),
+    ErrorBucket(
+        name="Complex sentence structure",
+        description="The input message has a complex sentence structure that makes it difficult to parse the intent.",
+        approach="Generate examples with varied sentence complexities to improve structural understanding",
+        example_issue="Model struggles with 'If possible, could you maybe send me the payment when convenient?'",
+        data_generation_strategy="Include examples with complex grammar, nested clauses, and varied sentence structures"
+    ),
+    ErrorBucket(
+        name="Miss detecting simple intent",
+        description="The model fails to detect a simple intent that is clearly expressed in the input message.",
+        approach="Generate more simple, everyday conversational examples to improve basic intent recognition",
+        example_issue="Model misclassifies simple 'pay me' as smart_payment_system_command instead of payment_request",
+        data_generation_strategy="Create straightforward, colloquial examples using common everyday language"
+    ),
+]

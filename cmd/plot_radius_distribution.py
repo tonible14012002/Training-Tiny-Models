@@ -111,7 +111,7 @@ def plot_radius_distributions(label_distances, intent_radii, id2label):
 
 def main():
     # Configuration
-    checkpoint_path = ".checkpoints/9"  # Latest checkpoint with ADB data
+    checkpoint_path = ".checkpoints/16"  # Latest checkpoint with ADB data
     data_path = ".cache/.data.jsonl"
 
     print(f"Loading model from: {checkpoint_path}")
@@ -146,7 +146,6 @@ def main():
         print(f"  Std distance: {std_dist:.4f}")
         print(f"  Max distance: {max_dist:.4f}")
         print(f"  Within radius: {within_radius}/{len(distances)} ({100*within_radius/len(distances):.1f}%)")
-        print()
 
     # Create and save plot
     print("Creating distribution plots...")

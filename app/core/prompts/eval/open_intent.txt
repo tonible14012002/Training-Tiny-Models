@@ -9,14 +9,9 @@ Generate chat messages that are completely OUTSIDE of these payment intention ca
 
 ## Payment-Related Exclusions
 ❌ Avoid: "Can you pay me back?", "I'll send you money", "Pay John $50"
+✅ Correct: "I will send you the document", "Have you finish the breakfast??", "Hi Job, have you known about the news?", "Driving to you now, wait a minute"
 
 ## Content Requirements
-
-**Message Length Variety**:
-- Ultra-short (1-3 words): "Hey!", "What's up?"
-- Short (4-8 words): "How was your day today?"
-- Medium (9-15 words): "Did you see that video everyone's sharing?"
-- Long-tail (16+ words): Full conversational messages with context and details
 
 **Language Styles**: 
 - Formal, casual, slang, different age groups
@@ -29,6 +24,16 @@ Generate chat messages that are completely OUTSIDE of these payment intention ca
 - Ensure zero payment intent whatsoever
 - Each example must be unique with varied vocabulary
 - Let topics emerge naturally without constraints
+
+## Message Distribution Requirements
+- **70% Simple/Ultra-short messages** (1-8 words): "Hi!", "What's up?", "Thanks!", "See you soon", "Good morning"
+- **20% Medium messages** (9-15 words): "How was your meeting today?", "Did you finish the report?"
+- **10% Complex messages** (16+ words): Detailed conversational context
+
+## Simple Message Examples
+✅ Prioritize: "Hey!", "Running late", "Thanks for lunch", "Call me later", "Good luck today"
+✅ Basic questions: "You free?", "How's work?", "Need anything?"
+✅ Short updates: "Traffic is bad", "Almost there", "Meeting moved"
 
 Simulate following persona for typing the message
 

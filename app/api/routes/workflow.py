@@ -33,11 +33,11 @@ async def generate_synthetic_data(request: Request):
 
 @router.post("/fresh-generate-eval")
 async def generate_fresh_eval_data(request: Request):
-    """Generate fresh evaluation data using data generator."""
-    data_generator: services.DataGenerator = request.app.state.data_generator
+    """Generate fresh evaluation data using eval generator - both intent and open intent."""
+    eval_generator: services.EvalGenerator = request.app.state.eval_generator
     path = ".cache/human_seed.json"
 
-    # Load human seed data (same as training data generation)
+    # Load human seed data for intent generation
     with open(path, "r") as f:
         seed_data = json.load(f)
     logger.info(f"Loaded {len(seed_data)} seed examples from {path}")
@@ -49,13 +49,19 @@ async def generate_fresh_eval_data(request: Request):
 
     human_seeds = TypeAdapter(List[schemas.Sample]).validate_python(converted)
 
-    # Generate fresh evaluation data
-    eval_samples = await data_generator.fresh_gen_eval(human_seeds)
+    # Optional: Load seed messages for open intent (can be empty for now)
+    human_seed_messages = []  # Can be extended to load from a file
+
+    # Generate fresh evaluation data (both intent and open intent)
+    result = await eval_generator.fresh_gen(human_seeds, human_seed_messages)
 
     return {
         "message": "Evaluation data generation completed",
         "status": "completed",
-        "samples_generated": len(eval_samples)
+        "iteration_number": result["iteration_number"],
+        "intent_samples_generated": result["intent_count"],
+        "open_intent_messages_generated": result["open_intent_count"],
+        "total_generated": result["total_generated"]
     }
 
 @router.post("/train")
@@ -71,18 +77,114 @@ async def train_student_model(request: Request):
     }
 
 @router.post("/evaluate")
-async def evaluate_model(request: Request):
-    """Evaluate model performance on dev/test sets."""
-    data_generator: services.DataGenerator = request.app.state.data_generator
+async def evaluate_model(
+    request: Request,
+    payload: schemas.EvaluationRequest = schemas.EvaluationRequest()
+) -> schemas.EvaluationResponse:
+    """Evaluate model performance using the latest evaluation dataset with comprehensive analysis."""
+
+    # Get services from app state
     model_analyzer: services.ModelAnalyzer = request.app.state.model_analyzer
     trainer_service: services.TrainerService = request.app.state.trainer_service
+    eval_data_manager: services.EvalDataManager = request.app.state.eval_data_manager
 
-    trainer_service.load_model()
+    try:
+        # Get latest checkpoint
+        checkpoint_path = trainer_service.get_latest_item_path()
+        if checkpoint_path is None:
+            return schemas.EvaluationResponse(
+                message="No trained model checkpoint found",
+                status="error",
+                checkpoint_path="",
+                evaluation_data_info={},
+                results={}
+            )
 
-    return {
-        "message": "Evaluation completed",
-        "status": "completed",
-    }
+        logger.info(f"Using checkpoint: {checkpoint_path}")
+
+        # Load evaluation dataset
+        eval_samples = eval_data_manager.load(payload.iteration_number)
+        if not eval_samples:
+            return schemas.EvaluationResponse(
+                message="No evaluation data found",
+                status="error",
+                checkpoint_path=str(checkpoint_path),
+                evaluation_data_info={},
+                results={}
+            )
+
+        logger.info(f"Loaded {len(eval_samples)} evaluation samples")
+
+        # Convert to dataset format
+        from datasets import Dataset
+        eval_data = []
+        for sample in eval_samples:
+            eval_data.append({
+                "msg": sample.msg,
+                "label": schemas.PAYMENT_LABEL.from_str(sample.label)
+            })
+
+        eval_dataset = Dataset.from_list(eval_data)
+
+        # Load open intent data if requested
+        open_intent_samples = None
+        if payload.include_open_intent:
+            open_intent_samples = eval_data_manager.load_open_intent(payload.iteration_number)
+            logger.info(f"Loaded {len(open_intent_samples) if open_intent_samples else 0} open intent samples")
+
+        # Load model and run comprehensive evaluation
+        model_analyzer.load_model(str(checkpoint_path))
+
+        evaluation_result = model_analyzer.analyze_model(
+            evaluation_dataset=eval_dataset,
+            open_intent_samples=open_intent_samples,
+            include_test_cases=payload.include_test_cases
+        )
+
+        # Generate analysis report
+        analysis_report = model_analyzer.generate_analysis_report(evaluation_result)
+
+        # Analyze errors
+        error_buckets = model_analyzer.analyze_errors(evaluation_result)
+
+        # Prepare evaluation data info
+        iteration_num = payload.iteration_number or eval_data_manager.get_latest_item_number()
+        eval_info = {
+            "iteration_number": iteration_num,
+            "known_intent_samples": len(eval_samples),
+            "open_intent_samples": len(open_intent_samples) if open_intent_samples else 0,
+            "total_samples": len(eval_samples) + (len(open_intent_samples) if open_intent_samples else 0)
+        }
+
+        # Prepare results
+        results = {
+            "overall_metrics": evaluation_result.overall.model_dump(),
+            "per_label_metrics": {k: v.model_dump() for k, v in evaluation_result.per_label.items()},
+            "open_intent_analysis": evaluation_result.open_intent_analysis.model_dump() if evaluation_result.open_intent_analysis else None,
+            "adb_info": evaluation_result.adb_info,
+            "analysis_report": analysis_report,
+            "error_buckets": [bucket.model_dump() for bucket in error_buckets],
+            "test_cases_included": payload.include_test_cases,
+            "total_test_cases": len(evaluation_result.test_cases) if evaluation_result.test_cases else 0
+        }
+
+        return schemas.EvaluationResponse(
+            message="Model evaluation completed successfully",
+            status="completed",
+            checkpoint_path=str(checkpoint_path),
+            evaluation_data_info=eval_info,
+            results=results
+        )
+
+    except Exception as e:
+        logger.error(f"Evaluation failed: {str(e)}")
+        return schemas.EvaluationResponse(
+            message=f"Evaluation failed: {str(e)}",
+            status="error",
+            checkpoint_path=str(checkpoint_path) if 'checkpoint_path' in locals() else "",
+            evaluation_data_info={},
+            results={}
+        )
 
 @router.post("/inference")
 async def inference_model(request: Request, payload: schemas.InferenceRequest):
@@ -116,7 +218,7 @@ async def calc_adb(request: Request):
     """Calculate ADB metric on dev/test sets."""
     trainer_service: services.TrainerService = request.app.state.trainer_service
     data_manager: services.DataManager = request.app.state.data_manager
-    
+
     ds = data_manager.to_datasets()
 
     checkpoint_pth = trainer_service.get_latest_item_path()
@@ -128,4 +230,43 @@ async def calc_adb(request: Request):
     return {
         "message": "ADB calculation completed",
         "status": "completed",
+    }
+
+@router.post("/evaluate-adb")
+async def evaluate_adb(request: Request):
+    """Evaluate model performance using ADB on current dataset."""
+    trainer_service: services.TrainerService = request.app.state.trainer_service
+    data_manager: services.DataManager = request.app.state.data_manager
+
+    # Get dataset and latest checkpoint
+    ds = data_manager.to_datasets()
+    checkpoint_pth = trainer_service.get_latest_item_path()
+    logger.info(f"Using checkpoint: {checkpoint_pth}")
+
+    # Run ADB evaluation
+    inferencer = ADBModelInference(checkpoint_pth)
+    evaluation_results = inferencer.evaluate_with_adb(ds)
+
+    return {
+        "message": "ADB evaluation completed",
+        "status": "completed",
+        "results": evaluation_results
+    }
+
+@router.post("/generate-open-intent")
+async def generate_open_intent_data(request: Request):
+    """Generate open intent evaluation data - messages that do NOT belong to payment categories."""
+    eval_generator: services.EvalGenerator = request.app.state.eval_generator
+
+    # Optional: Load some seed messages from a file if available
+    human_seeds = []  # Can be extended to load from a file like human_seed.json
+
+    # Generate open intent messages
+    open_intent_messages = await eval_generator.gen_open_intent(human_seeds)
+
+    return {
+        "message": "Open intent data generation completed",
+        "status": "completed",
+        "messages_generated": len(open_intent_messages),
+        "sample_messages": open_intent_messages[:5]  # Show first 5 as examples
     }

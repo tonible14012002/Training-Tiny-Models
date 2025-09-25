@@ -41,11 +41,22 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing data manager...")
     data_manager = services.DataManager()
 
+    logger.info("Initializing eval data manager...")
+    eval_data_manager = services.EvalDataManager()
+
     logger.info("Initializing data generator...")
     data_generator = services.DataGenerator(
         llm=teacher_llm,
         prompt_mgr=prompt_mgr,
         data_manager=data_manager,
+    )
+
+    logger.info("Initializing eval generator...")
+    eval_generator = services.EvalGenerator(
+        llm=teacher_llm,
+        prompt_mgr=prompt_mgr,
+        data_manager=data_manager,
+        eval_data_manager=eval_data_manager,
     )
 
     trainer_service =  services.TrainerService(
@@ -59,7 +70,9 @@ async def lifespan(app: FastAPI):
     )
 
     app.state.data_manager = data_manager
+    app.state.eval_data_manager = eval_data_manager
     app.state.data_generator = data_generator
+    app.state.eval_generator = eval_generator
     app.state.prompt_mgr = prompt_mgr
     app.state.trainer_service = trainer_service
     app.state.model_analyzer = model_analyzer
