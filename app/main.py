@@ -52,10 +52,17 @@ async def lifespan(app: FastAPI):
         base_model="prajjwal1/bert-tiny"
     )
 
+    logger.info("Initializing model analyzer...")
+    model_analyzer = services.ModelAnalyzer(
+        trainer_service=trainer_service,
+        data_manager=data_manager
+    )
+
     app.state.data_manager = data_manager
     app.state.data_generator = data_generator
     app.state.prompt_mgr = prompt_mgr
     app.state.trainer_service = trainer_service
+    app.state.model_analyzer = model_analyzer
 
     yield  # The app runs here
 

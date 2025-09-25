@@ -1,72 +1,39 @@
 from typing import List, Optional
 from datasets import Dataset
 from app.core.schemas import Sample, PAYMENT_LABEL
-from app.utils.scorer import EvaluationUtils
+from app.core.mixins import DeduplicationMixin
 import json
 
-class DataManager:
+class DataManager(DeduplicationMixin):
     LOCAL_FILE = '.cache/.data.jsonl'
 
     def __init__(
             self,
             rouge_threshold: float = 0.6,
         ):
-        self.ROUGE_THRESHOLD = rouge_threshold
+        self._rouge_threshold = rouge_threshold
+
+    @property
+    def rouge_threshold(self) -> float:
+        return self._rouge_threshold
 
     def save(self, data: List[Sample]):
+        self._save(data, path=self.LOCAL_FILE)
+
+    def _save(self, data: List[Sample], path: str = None):
         # open File and append data
-        with open(self.LOCAL_FILE, 'a') as f:
+        with open(path, 'a') as f:
             for item in data:
                 data_dict = item.model_dump()
                 data_dict['label'] = PAYMENT_LABEL.from_str(item.label)
                 s = json.dumps(data_dict)
                 f.write(f"{s}\n")
 
-    async def deduplicate(self, data: List[Sample]) -> List[Sample]:
-        deduped = {}
-        for item in data:
-            pass
-            # Filter low ROUGE-L score
-            if len(deduped.keys()) == 0:
-                deduped[item.msg] = item
-                continue
-            
-            ok = True
-            for existing_item in deduped.values():
-                rouge = await EvaluationUtils.score_rouge(
-                    ref=existing_item.msg,
-                    pred=item.msg,
-                    rouge_type="rougeL",
-                    mode="precision"
-                )
-
-                if rouge < self.ROUGE_THRESHOLD:
-                    ok = False
-                    break
-            
-            if ok:
-                deduped[item.msg] = item
-
-        return list(deduped.values())
     
     async def filter(self, data: List[Sample]) -> List[Sample]:
-        existed_data = self.load()
-
-        add = []
-        # Filter low ROUGE-L score against existed data
-        for item in data:
-            for existing_item in existed_data:
-                rouge = await EvaluationUtils.score_rouge(
-                    ref=item.msg,
-                    pred=existing_item.msg,
-                    rouge_type="rougeL",
-                    mode="precision"
-                )
-                if rouge < self.ROUGE_THRESHOLD:
-                    add.append(item)
-                    break
-                
-        return add
+        """Filter new data against existing data in the local file."""
+        existing_data = self.load()
+        return await self.filter_against_existing(data, existing_data)
     
     def load(self) -> List[Sample]:
         # Load data from file

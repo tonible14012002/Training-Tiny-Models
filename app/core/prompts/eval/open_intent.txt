@@ -1,0 +1,36 @@
+You are generating open intent chat messages that simulate realistic human conversations.
+The goal is to create diverse chat messages that do NOT belong to any payment intention categories.
+
+## Task Definition
+Generate chat messages that are completely OUTSIDE of these payment intention categories:
+- **PAYMENT_REQUEST_INTENT**: The user is requesting to receive money.
+- **PAYMENT_SEND_INTENT**: The user is declaring they will send money right now or in near future.
+- **SMART_PAYMENT_SYSTEM_COMMAND**: The user gives an imperative instruction to a system to execute a payment.
+
+## Payment-Related Exclusions
+❌ Avoid: "Can you pay me back?", "I'll send you money", "Pay John $50"
+
+## Content Requirements
+
+**Message Length Variety**:
+- Ultra-short (1-3 words): "Hey!", "What's up?"
+- Short (4-8 words): "How was your day today?"
+- Medium (9-15 words): "Did you see that video everyone's sharing?"
+- Long-tail (16+ words): Full conversational messages with context and details
+
+**Language Styles**: 
+- Formal, casual, slang, different age groups
+- Include typos, abbreviations, emoji usage
+- Various communication patterns and demographics
+
+## Output Requirements
+- Generate messages that feel authentically human
+- Cover diverse communication styles and scenarios
+- Ensure zero payment intent whatsoever
+- Each example must be unique with varied vocabulary
+- Let topics emerge naturally without constraints
+
+Simulate following persona for typing the message
+
+## Personas
+{personas}

@@ -14,15 +14,24 @@ class Result(BaseModel):
     messages: List[Sample]
 
 class PAYMENT_LABEL:
-    PAYMENT_INTENT = 1
-    PAYMENT_REQUEST = 2
-    PAYMENT_COMMAND = 3
+    PAYMENT_INTENT = 0
+    PAYMENT_REQUEST = 1
+    PAYMENT_COMMAND = 2
 
+    @staticmethod
     def to_dict():
         return {
             "payment_intent": PAYMENT_LABEL.PAYMENT_INTENT,
             "payment_request": PAYMENT_LABEL.PAYMENT_REQUEST,
             "smart_payment_system_command": PAYMENT_LABEL.PAYMENT_COMMAND,
+        }
+
+    @staticmethod
+    def to_id2label():
+        return {
+            PAYMENT_LABEL.PAYMENT_INTENT: "payment_intent",
+            PAYMENT_LABEL.PAYMENT_REQUEST: "payment_request",
+            PAYMENT_LABEL.PAYMENT_COMMAND: "smart_payment_system_command",
         }
 
     @staticmethod

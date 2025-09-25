@@ -1,6 +1,7 @@
 from src.payment_classifier.llm.base import BaseLLM
 from src.payment_classifier.prompts.base import BasePromptManager
 from app.core.services.data_manager.data_manager import DataManager
+from app.core.services.eval_data_manager.eval_data_manager import EvalDataManager
 from datasets import load_dataset
 
 import random
@@ -12,26 +13,28 @@ logger = logging.getLogger(__name__)
 
 class DataGenerator:
     NUMBER_PER_ITER = 15
-    MAX_GEN_PER_ITER = 20
+    MAX_GEN_PER_ITER = 25
 
     SEED_PROMPT_KEY = "seed"
+    EVAL_PROMPT_KEY = "eval_seed"
+    NUMBER_EVAL_PER_ITER = 10
+    MAX_GEN_EVAL_PER_ITER = 20
 
-    def __init__(self, llm: BaseLLM, prompt_mgr: BasePromptManager, data_manager: DataManager):
+    def __init__(self, llm: BaseLLM, prompt_mgr: BasePromptManager, data_manager: DataManager, eval_data_manager: EvalDataManager = None):
         self.llm = llm
         self.prompt_mgr = prompt_mgr
         self.data_manager = data_manager
+        self.eval_data_manager = eval_data_manager or EvalDataManager()
         self.personas_ds = load_dataset("proj-persona/PersonaHub", "persona")
 
     async def fresh_gen(self, human_seeds: List[Sample]) -> List[Sample]:
         # First iterate
         results = await self._gen(human_seeds)
-        
-        print(results[0])
 
         filted_result = await self.data_manager.deduplicate(results)
         self.data_manager.save(filted_result)
 
-        for _ in range(self.NUMBER_PER_ITER):
+        for _ in range(self.NUMBER_PER_ITER - 1):
             # Make new seed
             new_seed = random.sample(results, k=min(len(results), 2))
             new_human_seeds = random.sample(human_seeds, k=min(len(human_seeds), 6))
@@ -60,3 +63,4 @@ class DataGenerator:
         ], Result)).messages
 
         return data
+        """Get default seed samples for evaluation generation."""
