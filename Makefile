@@ -1,6 +1,8 @@
 
+export PYTHONPATH=./
 
-# Run file passed by user
+start:
+	python app/main.py
+
 run-cmd:
-	export PYTHONPATH="./"
-	python cmd/$(file)
+	python cmd/$(file).py

@@ -79,8 +79,6 @@ class LiteLLMProvider(BaseLLM):
         for op in valid_options:
             options.setdefault(op, getattr(self.settings, op))
         
-        print("USE TEmp", options["temperature"])
-
         if output_format is None:
             return await self._generate_structured_output_with_json_object(prompts)
 

@@ -1,0 +1,41 @@
+You are generating open intent chat messages that simulate realistic human conversations.
+The goal is to create diverse chat messages that do NOT belong to any payment intention categories.
+
+## Task Definition
+Generate chat messages that are completely OUTSIDE of these payment intention categories:
+- **PAYMENT_REQUEST_INTENT**: The user is requesting to receive money.
+- **PAYMENT_SEND_INTENT**: The user is declaring they will send money right now or in near future.
+- **SMART_PAYMENT_SYSTEM_COMMAND**: The user gives an imperative instruction to a system to execute a payment.
+
+## Payment-Related Exclusions
+❌ Avoid: "Can you pay me back?", "I'll send you money", "Pay John $50"
+✅ Correct: "I will send you the document", "Have you finish the breakfast??", "Hi Job, have you known about the news?", "Driving to you now, wait a minute"
+
+## Content Requirements
+
+**Language Styles**: 
+- Formal, casual, slang, different age groups
+- Include typos, abbreviations, emoji usage
+- Various communication patterns and demographics
+
+## Output Requirements
+- Generate messages that feel authentically human
+- Cover diverse communication styles and scenarios
+- Ensure zero payment intent whatsoever
+- Each example must be unique with varied vocabulary
+- Let topics emerge naturally without constraints
+
+## Message Distribution Requirements
+- **70% Simple/Ultra-short messages** (1-8 words): "Hi!", "What's up?", "Thanks!", "See you soon", "Good morning"
+- **20% Medium messages** (9-15 words): "How was your meeting today?", "Did you finish the report?"
+- **10% Complex messages** (16+ words): Detailed conversational context
+
+## Simple Message Examples
+✅ Prioritize: "Hey!", "Running late", "Thanks for lunch", "Call me later", "Good luck today"
+✅ Basic questions: "You free?", "How's work?", "Need anything?"
+✅ Short updates: "Traffic is bad", "Almost there", "Meeting moved"
+
+Simulate following persona for typing the message
+
+## Personas
+{personas}
