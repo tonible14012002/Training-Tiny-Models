@@ -387,7 +387,6 @@ class ModelAnalyzer:
 
         return error_patterns
 
-
     def _analyze_open_intents(self, open_intent_samples: List[str]) -> Dict:
         """Analyze open intent detection capability"""
         if self.adb_inferencer is None:
@@ -417,100 +416,6 @@ class ModelAnalyzer:
             "misclassified": misclassified,
             "false_positive_rate": (total_samples - detected_as_unknown) / total_samples if total_samples > 0 else 0.0
         }
-
-    def analyze_errors(self, evaluation_result: EvaluationResult) -> List[ErrorBucket]:
-        """
-        Analyze errors and categorize them into error buckets.
-
-        Args:
-            evaluation_result: Result from analyze_model()
-
-        Returns:
-            List of relevant error buckets based on the analysis
-        """
-        if not evaluation_result.test_cases:
-            logger.warning("No test cases available for error analysis. Run analyze_model with include_test_cases=True")
-            return []
-
-        # Analyze error patterns
-        error_patterns = self._categorize_errors(evaluation_result.test_cases)
-
-        # Map to error buckets
-        relevant_buckets = self._map_to_error_buckets(error_patterns, evaluation_result.overall)
-
-        return relevant_buckets
-
-    def _categorize_errors(self, test_cases: List[TestCase]) -> Dict:
-        """Categorize errors based on test case analysis"""
-        patterns = {
-            "keyword_reliance": 0,
-            "simple_intent_miss": 0,
-            "complex_structure": 0,
-            "ambiguous_cases": 0,
-            "focus_issues": 0
-        }
-
-        total_errors = 0
-
-        for test_case in test_cases:
-            if test_case.prediction and test_case.prediction.label != test_case.true_label:
-                total_errors += 1
-
-                # Simple heuristics for error categorization
-                msg = test_case.input.msg.lower()
-                msg_len = len(msg.split())
-
-                # Simple intent miss - short, clear messages
-                if msg_len <= 5 and any(word in msg for word in ['pay', 'send', 'request', 'money']):
-                    patterns["simple_intent_miss"] += 1
-
-                # Complex structure - long sentences with multiple clauses
-                elif msg_len > 10 or ',' in msg or 'if' in msg or 'when' in msg:
-                    patterns["complex_structure"] += 1
-
-                # Ambiguous cases - could be multiple intents
-                elif any(word in msg for word in ['maybe', 'could', 'might', 'possibly']):
-                    patterns["ambiguous_cases"] += 1
-
-                # Default to keyword reliance or focus issues
-                else:
-                    if test_case.prediction.prob > 0.8:  # High confidence wrong answer
-                        patterns["keyword_reliance"] += 1
-                    else:
-                        patterns["focus_issues"] += 1
-
-        patterns["total_errors"] = total_errors
-        return patterns
-
-    def _map_to_error_buckets(self, patterns: Dict, overall_metrics: OverallMetrics) -> List[ErrorBucket]:
-        """Map error patterns to relevant error buckets"""
-        # Import the example buckets
-        from app.core.schemas.analysis import EXAMPLE_ERROR_BUCKETS
-
-        relevant_buckets = []
-
-        # Add buckets based on error patterns
-        if patterns["simple_intent_miss"] > patterns["total_errors"] * 0.2:  # >20% of errors
-            relevant_buckets.append(next(bucket for bucket in EXAMPLE_ERROR_BUCKETS
-                                       if bucket.name == "Miss detecting simple intent"))
-
-        if patterns["keyword_reliance"] > patterns["total_errors"] * 0.3:  # >30% of errors
-            relevant_buckets.append(next(bucket for bucket in EXAMPLE_ERROR_BUCKETS
-                                       if bucket.name == "Over reliance on keywords"))
-
-        if patterns["complex_structure"] > patterns["total_errors"] * 0.2:  # >20% of errors
-            relevant_buckets.append(next(bucket for bucket in EXAMPLE_ERROR_BUCKETS
-                                       if bucket.name == "Complex sentence structure"))
-
-        if patterns["focus_issues"] > patterns["total_errors"] * 0.15:  # >15% of errors
-            relevant_buckets.append(next(bucket for bucket in EXAMPLE_ERROR_BUCKETS
-                                       if bucket.name == "Miss focus on important word"))
-
-        if overall_metrics.accuracy < 0.7:  # Low overall accuracy
-            relevant_buckets.append(next(bucket for bucket in EXAMPLE_ERROR_BUCKETS
-                                       if bucket.name == "Ambiguous intent"))
-
-        return relevant_buckets
 
     def generate_analysis_report(self, evaluation_result: EvaluationResult) -> str:
         """Generate a comprehensive analysis report"""

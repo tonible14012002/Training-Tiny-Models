@@ -1,22 +1,38 @@
 # ErrorReasoner Service Documentation
 
-## Overview
+## ⚠️ Status: REMOVED
 
-The `ErrorReasoner` service is a critical component in the iterative fine-tuning system that bridges the gap between error detection and targeted data generation. It analyzes misclassification patterns to provide detailed reasoning about why specific errors occurred, which then guides strategic synthetic data generation.
+**Note**: The ErrorReasoner service has been removed from the codebase as of the latest version. Its functionality has been integrated into the ModelAnalyzer service for more streamlined error analysis.
 
-## Architecture
+## Historical Overview
+
+The `ErrorReasoner` service was previously a critical component in the iterative fine-tuning system that bridged the gap between error detection and targeted data generation. It analyzed misclassification patterns to provide detailed reasoning about why specific errors occurred, which then guided strategic synthetic data generation.
+
+## Current Architecture (Post-Removal)
 
 ```
-ModelAnalyzer → ErrorReasoner → DataGenerator
-     ↓              ↓              ↓
-Error Detection → Root Cause → Targeted Data
-                 Analysis      Generation
+ModelAnalyzer → (Built-in Error Analysis) → DataGenerator
+     ↓                     ↓                      ↓
+Error Detection → Error Categorization → Targeted Data Generation
 ```
 
-## Location
-- **Main Class**: `app/core/services/error_reasoner/error_reasoner.py`
-- **Module**: `app/core/services/error_reasoner/__init__.py`
-- **Integration**: `app/core/services/__init__.py`
+The error reasoning functionality has been consolidated into the ModelAnalyzer service, which now provides:
+- Built-in error bucket categorization
+- Systematic misclassification analysis
+- Direct integration with data generation workflows
+
+## Migration to ModelAnalyzer
+
+Error analysis functionality is now handled by:
+- **Main Class**: `app/core/services/model_analyzer/model_analyzer.py`
+- **Error Analysis Method**: `ModelAnalyzer.analyze_errors()`
+- **Error Buckets**: Defined in `app/core/schemas/analysis.py`
+
+---
+
+## Historical Documentation (Pre-Removal)
+
+The following sections document the previous ErrorReasoner implementation for reference:
 
 ## Core Data Structures
 

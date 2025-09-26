@@ -1,5 +1,12 @@
 # Auto-Train Model Workflow Documentation
 
+## ✅ Implementation Status
+
+This workflow has been **implemented** in the `TrainingOrchestrator` service (`app/core/services/orchestrator/training_orchestrator.py`). The automated pipeline can be triggered via:
+```bash
+curl -X POST http://localhost:8000/workflow/start-auto-pipeline
+```
+
 ## Table of Contents
 1. [System Overview](#system-overview)
 2. [Core Workflow](#core-workflow)
