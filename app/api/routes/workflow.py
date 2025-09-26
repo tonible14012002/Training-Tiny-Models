@@ -285,3 +285,92 @@ async def start_auto_training_pipeline(
 
     return result
 
+
+@router.post("/analyze-error-patterns")
+async def analyze_error_patterns(request: Request):
+    """
+    Analyze error patterns from the latest evaluation results using LLM.
+    This endpoint takes the errors_by_label output from model evaluation and
+    uses LLM to identify patterns, root causes, and data-focused recommendations.
+    """
+    # Get services from app state
+    model_analyzer: services.ModelAnalyzer = request.app.state.model_analyzer
+    trainer_service: services.TrainerService = request.app.state.trainer_service
+    eval_data_manager: services.EvalDataManager = request.app.state.eval_data_manager
+    error_pattern_analyzer: services.ErrorPatternAnalysisService = request.app.state.error_pattern_analyzer
+
+    try:
+        # Get latest checkpoint
+        checkpoint_path = trainer_service.get_latest_item_path()
+        if checkpoint_path is None:
+            return {
+                "message": "No trained model checkpoint found",
+                "status": "error",
+                "error_analyses": []
+            }
+
+        # Load model and get latest evaluation data
+        model_analyzer.load_model(checkpoint_path)
+        evaluation_dataset = eval_data_manager.to_datasets()  # Load latest evaluation data
+
+        if evaluation_dataset is None:
+            return {
+                "message": "No evaluation dataset found",
+                "status": "error",
+                "error_analyses": []
+            }
+
+        logger.info(f"Running model evaluation for error pattern analysis using checkpoint: {checkpoint_path}")
+
+        # Run evaluation to get errors_by_label
+        evaluation_result = model_analyzer.analyze_model(
+            evaluation_dataset=evaluation_dataset,
+            include_test_cases=False,
+            use_comprehensive_unknown_evaluation=False
+        )
+
+        if not evaluation_result.errors_by_label:
+            return {
+                "message": "No errors found to analyze",
+                "status": "completed",
+                "error_analyses": []
+            }
+
+        # Define label explanations for payment classification
+        label_explanations = {
+            "PAYMENT_REQUEST": "User asking someone to send them money",
+            "PAYMENT_SEND": "User intends to send/pay money to someone",
+            "PAYMENT_COMMAND": "User instructing a system to make a payment",
+            "NO_PAYMENT": "No payment intention present"
+        }
+
+        # Analyze error patterns using LLM
+        logger.info("Starting LLM-based error pattern analysis...")
+        error_analyses = await error_pattern_analyzer.analyze_error_patterns(
+            errors_by_label=evaluation_result.errors_by_label,
+            label_explanations=label_explanations
+        )
+
+        return {
+            "message": f"Error pattern analysis completed. Analyzed {len(error_analyses)} error patterns.",
+            "status": "completed",
+            "checkpoint_path": checkpoint_path,
+            "error_analyses": [analysis.dict() for analysis in error_analyses],
+            "evaluation_summary": {
+                "overall_accuracy": evaluation_result.overall.accuracy,
+                "macro_f1": evaluation_result.overall.macro_f1,
+                "total_errors": sum(
+                    len(label_errors.false_positives) + len(label_errors.false_negatives)
+                    for label_errors in evaluation_result.errors_by_label.values()
+                )
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Error pattern analysis failed: {e}")
+        return {
+            "message": f"Error pattern analysis failed: {str(e)}",
+            "status": "error",
+            "error_analyses": []
+        }
+

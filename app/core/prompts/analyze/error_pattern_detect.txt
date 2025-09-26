@@ -1,15 +1,42 @@
-You are given a set of examples that were incorrectly classified by a model as belonging to the same intent label: {predicted_label}. 
-Each example actually belongs to {expected label}.
+You are analyzing classification errors where a model incorrectly predicted examples as "{predicted_label}" when they actually belong to "{expected_label}".
 
-{label_explainnation}
+Context:
+{label_explanation}
 
-Your task: 
-1. Analyze all examples together (not individually).  
-2. Identify the common similarities between them that might have caused the model to overfit and misclassify.
-3. Consider different angles of similarity: 
-   - Lexical patterns (words, repeated tokens, pronouns like "you", politeness markers, etc.)  
-   - Structural patterns (questions, imperative form, short conversational length, etc.)  
-   - Semantic type (requesting action, asking info, offering help, invitations, etc.)  
-   - Annotation / dataset bias (e.g., "any request" → mislearned as "payment_request").  
-4. Summarize the likely overfitting rules the model has implicitly learned.  
-5. Output the findings in a structured list of similarity patterns.
+Examples to analyze:
+{test_cases}
+
+Your task:
+1. Identify SPECIFIC, CONCRETE data issues that caused these misclassifications. Be precise about what's missing or wrong in the dataset.
+
+Examples of specific issues:
+- "Missing examples where user says 'me' as payment recipient"
+- "Only 3 examples use word 'transfer' for payment_request class"
+- "No examples with question format for payment_send"
+- "Word 'pay' appears in 80% of payment_intent but only 20% of payment_request"
+
+2. For each issue, provide PROGRAMMABLE data generation actions with exact specifications:
+
+Action types available:
+- "generate_more": Create more examples of specific patterns
+- "filter_out": Remove problematic examples
+- "replace_words": Replace confusing words with alternatives
+- "balance_distribution": Adjust class distribution or keyword frequency
+
+For each action, specify:
+- EXACT expected_count (number of examples to generate/modify)
+- SPECIFIC keywords_to_include or keywords_to_avoid
+- PRECISE sentence_patterns to follow
+- CLEAR diversity_constraints
+- CONCRETE min_examples or target_distribution
+
+Example action:
+- action_type: "generate_more"
+- target_label: "payment_request"
+- expected_count: 25
+- keywords_to_include: ["me", "my", "I need"]
+- sentence_patterns: ["Can you [action] me [amount]", "I need you to [action] [amount]"]
+- diversity_constraints: ["vary pronouns", "use different amounts", "include informal language"]
+- min_examples: 25
+
+Be specific with numbers, keywords, and patterns - avoid abstract recommendations.
