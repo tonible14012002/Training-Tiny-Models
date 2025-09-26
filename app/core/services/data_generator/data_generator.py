@@ -12,8 +12,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 class DataGenerator:
-    NUMBER_PER_ITER = 30
-    MAX_GEN_PER_BATCH = 25
+    TOTAL_MESSAGE_PER_BATCH = 30
+    TOTAL_BATCH_PER_GEN = 25
 
     SEED_PROMPT_KEY = "train/seed"
     R = 20
@@ -35,7 +35,7 @@ class DataGenerator:
         self.data_manager.save(filted_result)
 
         # Subsequent batches
-        for _ in range(self.NUMBER_PER_ITER - 1):
+        for _ in range(self.TOTAL_MESSAGE_PER_BATCH - 1):
             # Make new seed
             new_seed = random.sample(results, k=min(len(results), 2))
             new_human_seeds = random.sample(human_seeds, k=min(len(human_seeds), 6))
@@ -53,13 +53,13 @@ class DataGenerator:
         Generate data from given seed and prompt
         '''
         seed_rd = random.randint(0, 1000)
-        personas = self.personas_ds["train"].shuffle(seed=seed_rd).select(range(self.MAX_GEN_PER_BATCH))
+        personas = self.personas_ds["train"].shuffle(seed=seed_rd).select(range(self.TOTAL_BATCH_PER_GEN))
         personas_txt = "\n- ".join([p['persona'] for p in personas])
 
         seed_examples_txt = "\n".join([f"- {s.msg}" for s in seed])
         prompt = self.prompt_mgr.get_prompt(self.SEED_PROMPT_KEY).format(personas=personas_txt)
 
-        user_input = f"## Examples: {seed_examples_txt} \nContinue generate {self.NUMBER_PER_ITER} diverse examples"
+        user_input = f"## Examples: {seed_examples_txt} \nContinue generate {self.TOTAL_MESSAGE_PER_BATCH} diverse examples"
 
         data = (await self.llm.generate_structured_output([
             {"role": "system", "content": prompt},

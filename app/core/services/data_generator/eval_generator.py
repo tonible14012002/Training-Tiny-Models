@@ -13,9 +13,13 @@ logger = logging.getLogger(__name__)
 
 class EvalGenerator:
 
-    NUMBER_PER_ITER = 15
-    MAX_GEN_PER_ITER = 25
-    NUMBER_EVAL_PER_ITER = 20
+    TOTAL_MESSAGE_GEN_PER_BATCH = 20
+    TOTAL_BATCH_PER_GEN = 20
+    # ~ 180
+
+    TOTAL_OPENINTENT_MESSAGE_GEN_PER_BATCH = 15
+    TOTAL_OPENINTENT_BATCH_PER_GEN = 4
+    # ~ 60
 
     EVAL_PROMPT_KEY = "eval/seed"
     OPEN_INTENT_PROMPT_KEY = "eval/open_intent"
@@ -83,7 +87,7 @@ class EvalGenerator:
         # Save initial batch to new iteration folder
         iteration_number = self.eval_data_manager.save(filtered_result)
 
-        for _ in range(self.NUMBER_EVAL_PER_ITER - 1):
+        for _ in range(self.TOTAL_BATCH_PER_GEN - 1):
             # Make new seed from previous results
             new_seed = random.sample(results, k=min(len(results), 2))
             new_human_seeds = random.sample(human_seeds, k=min(len(human_seeds), 6))
@@ -103,50 +107,6 @@ class EvalGenerator:
             results.extend(new_results)
 
         logger.info(f"Generated {len(results)} total evaluation samples in iteration {iteration_number}")
-        return results
-
-    async def gen_open_intent(self, human_seeds: List[str] = None) -> List[str]:
-        """
-        Generate open intent test cases - messages that do NOT belong to any payment intention categories.
-
-        Args:
-            human_seeds: Optional human seed messages to base generation on
-
-        Returns:
-            Generated open intent messages as simple strings
-        """
-        if human_seeds is None:
-            human_seeds = []
-
-        # First iteration
-        results = await self._gen_open_intent(human_seeds)
-
-        # Deduplicate initial results
-        filtered_result = await self.eval_data_manager.deduplicate_open_intent(results)
-
-        # Save initial batch to new iteration folder for open intent
-        iteration_number = self.eval_data_manager.save_open_intent(filtered_result)
-
-        for _ in range(self.NUMBER_EVAL_PER_ITER - 1):
-            # Make new seed from previous results
-            new_seed = random.sample(results, k=min(len(results), 2))
-            new_human_seeds = random.sample(human_seeds, k=min(len(human_seeds), 6))
-            seed = new_seed + new_human_seeds
-
-            # Generate new batch
-            new_results = await self._gen_open_intent(seed)
-            logger.debug(f"Generated {len(new_results)} new open intent evaluation examples")
-
-            # Deduplicate and filter against current iteration data
-            new_data = await self.eval_data_manager.filter_open_intent(new_results, iteration_number)
-
-            # Append filtered data to the same iteration folder
-            self.eval_data_manager.append_open_intent(new_data, iteration_number)
-
-            # Update results for next iteration
-            results.extend(new_results)
-
-        logger.info(f"Generated {len(results)} total open intent evaluation samples in iteration {iteration_number}")
         return results
 
     async def gen_open_intent_with_iteration(self, human_seeds: List[str] = None, iteration_number: int = None) -> List[str]:
@@ -174,7 +134,7 @@ class EvalGenerator:
         # Save to the specified iteration folder
         self.eval_data_manager._save_open_intent(filtered_result, iteration_number)
 
-        for _ in range(self.NUMBER_EVAL_PER_ITER - 1):
+        for _ in range(self.TOTAL_OPENINTENT_BATCH_PER_GEN - 1):
             # Make new seed from previous results
             new_seed = random.sample(results, k=min(len(results), 2))
             new_human_seeds = random.sample(human_seeds, k=min(len(human_seeds), 6))
@@ -207,14 +167,14 @@ class EvalGenerator:
             Generated samples
         """
         seed_rd = random.randint(0, 1000)
-        personas = self.personas_ds["train"].shuffle(seed=seed_rd).select(range(self.MAX_GEN_PER_ITER))
+        personas = self.personas_ds["train"].shuffle(seed=seed_rd).select(range(self.TOTAL_MESSAGE_GEN_PER_BATCH))
         personas_txt = "\n- ".join([p['persona'] for p in personas])
 
         prompt = self.prompt_mgr.get_prompt(self.EVAL_PROMPT_KEY).format(personas=personas_txt)
 
         data = (await self.llm.generate_structured_output([
             {"role": "system", "content": prompt},
-            {"role": "user", "content": f"generate {self.NUMBER_PER_ITER} diverse evaluation examples"}
+            {"role": "user", "content": f"generate {self.TOTAL_MESSAGE_GEN_PER_BATCH} diverse evaluation examples"}
         ], Result)).messages
 
         return data
@@ -230,7 +190,7 @@ class EvalGenerator:
             Generated open intent messages as strings
         """
         seed_rd = random.randint(0, 1000)
-        personas = self.personas_ds["train"].shuffle(seed=seed_rd).select(range(self.MAX_GEN_PER_ITER))
+        personas = self.personas_ds["train"].shuffle(seed=seed_rd).select(range(self.TOTAL_OPENINTENT_MESSAGE_GEN_PER_BATCH))
         personas_txt = "\n- ".join([p['persona'] for p in personas])
 
         # Add seed context if available
@@ -246,7 +206,7 @@ class EvalGenerator:
 
         messages = (await self.llm.generate_structured_output([
             {"role": "system", "content": prompt},
-            {"role": "user", "content": f"Generate {self.NUMBER_PER_ITER} diverse open intent messages. Return only the messages, one per line, no labels or extra formatting."}
+            {"role": "user", "content": f"Generate {self.TOTAL_OPENINTENT_MESSAGE_GEN_PER_BATCH} diverse open intent messages. Return only the messages, one per line, no labels or extra formatting."}
         ], OpenIntentResults)).messages
 
         return messages

@@ -1,6 +1,7 @@
 from typing import List
 import json
 import logging
+from datasets import Dataset
 from app.core.schemas.workflow import Sample, PAYMENT_LABEL
 from app.core.mixins import NumericalFileAccessMixin, DeduplicationMixin
 
@@ -271,6 +272,37 @@ class EvalDataManager(NumericalFileAccessMixin, DeduplicationMixin):
         """Calculate ROUGE-L similarity between two strings."""
         from app.utils.scorer import EvaluationUtils
         return await EvaluationUtils.score_rouge(text1, text2, rouge_type="rougeL")
+
+    def to_datasets(self, iteration_number: int = None) -> Dataset:
+        """
+        Convert evaluation data to HuggingFace datasets format.
+
+        Args:
+            iteration_number: Iteration to load. If None, loads latest.
+
+        Returns:
+            Dataset: The converted dataset
+        """
+        # Load all samples from the specified iteration
+        samples = self.load(iteration_number)
+        transformed = [{
+            "msg": sample.msg,
+            "label": PAYMENT_LABEL.from_str(sample.label)
+        } for sample in samples]
+
+        if not samples:
+            # Create empty dataset if no data
+            data_dict = {"msg": [], "label": []}
+        else:
+            # Convert samples to dataset format
+            data_dict = {
+                "msg": [sample['msg'] for sample in transformed],
+                "label": [sample['label'] for sample in transformed]
+            }
+
+        # Create dataset
+        dataset = Dataset.from_dict(data_dict)
+        return dataset
 
     def get_latest_item_number(self) -> int:
         """

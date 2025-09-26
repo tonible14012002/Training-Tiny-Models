@@ -115,16 +115,8 @@ async def evaluate_model(
 
         logger.info(f"Loaded {len(eval_samples)} evaluation samples")
 
-        # Convert to dataset format
-        from datasets import Dataset
-        eval_data = []
-        for sample in eval_samples:
-            eval_data.append({
-                "msg": sample.msg,
-                "label": schemas.PAYMENT_LABEL.from_str(sample.label)
-            })
-
-        eval_dataset = Dataset.from_list(eval_data)
+        # Convert to dataset format using EvalDataManager
+        eval_dataset = eval_data_manager.to_datasets(payload.iteration_number)
 
         # Load open intent data if requested
         open_intent_samples = None
@@ -141,11 +133,11 @@ async def evaluate_model(
             include_test_cases=payload.include_test_cases
         )
 
-        # Generate analysis report
-        analysis_report = model_analyzer.generate_analysis_report(evaluation_result)
+        # # Generate analysis report
+        # analysis_report = model_analyzer.generate_analysis_report(evaluation_result)
 
-        # Analyze errors
-        error_buckets = model_analyzer.analyze_errors(evaluation_result)
+        # Get error patterns grouped by (expected, predicted) tuples
+        error_patterns = model_analyzer.get_error_patterns_from_result(evaluation_result.errors_by_label) if evaluation_result.errors_by_label else {}
 
         # Prepare evaluation data info
         iteration_num = payload.iteration_number or eval_data_manager.get_latest_item_number()
@@ -162,10 +154,12 @@ async def evaluate_model(
             "per_label_metrics": {k: v.model_dump() for k, v in evaluation_result.per_label.items()},
             "open_intent_analysis": evaluation_result.open_intent_analysis.model_dump() if evaluation_result.open_intent_analysis else None,
             "adb_info": evaluation_result.adb_info,
-            "analysis_report": analysis_report,
-            "error_buckets": [bucket.model_dump() for bucket in error_buckets],
-            "test_cases_included": payload.include_test_cases,
-            "total_test_cases": len(evaluation_result.test_cases) if evaluation_result.test_cases else 0
+            # "errors_by_label": {k: v.model_dump() for k, v in evaluation_result.errors_by_label.items()} if evaluation_result.errors_by_label else None,
+            "error_patterns": {k: [case.model_dump() for case in cases] for k, cases in error_patterns.items()},
+            # "analysis_report": analysis_report,
+            # "error_buckets": [bucket.model_dump() for bucket in error_buckets],
+            # "total_test_cases": len(evaluation_result.test_cases) if evaluation_result.test_cases else 0,
+            # "test_cases": [tc.model_dump() for tc in evaluation_result.test_cases] if evaluation_result.test_cases else []
         }
 
         return schemas.EvaluationResponse(
@@ -251,24 +245,6 @@ async def evaluate_adb(request: Request):
         "message": "ADB evaluation completed",
         "status": "completed",
         "results": evaluation_results
-    }
-
-@router.post("/generate-open-intent")
-async def generate_open_intent_data(request: Request):
-    """Generate open intent evaluation data - messages that do NOT belong to payment categories."""
-    eval_generator: services.EvalGenerator = request.app.state.eval_generator
-
-    # Optional: Load some seed messages from a file if available
-    human_seeds = []  # Can be extended to load from a file like human_seed.json
-
-    # Generate open intent messages
-    open_intent_messages = await eval_generator.gen_open_intent(human_seeds)
-
-    return {
-        "message": "Open intent data generation completed",
-        "status": "completed",
-        "messages_generated": len(open_intent_messages),
-        "sample_messages": open_intent_messages[:5]  # Show first 5 as examples
     }
 
 @router.post("/auto-train-pipeline")

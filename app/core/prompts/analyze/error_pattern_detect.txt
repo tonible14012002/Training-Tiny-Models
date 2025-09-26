@@ -1,0 +1,15 @@
+You are given a set of examples that were incorrectly classified by a model as belonging to the same intent label: {predicted_label}. 
+Each example actually belongs to {expected label}.
+
+{label_explainnation}
+
+Your task: 
+1. Analyze all examples together (not individually).  
+2. Identify the common similarities between them that might have caused the model to overfit and misclassify.
+3. Consider different angles of similarity: 
+   - Lexical patterns (words, repeated tokens, pronouns like "you", politeness markers, etc.)  
+   - Structural patterns (questions, imperative form, short conversational length, etc.)  
+   - Semantic type (requesting action, asking info, offering help, invitations, etc.)  
+   - Annotation / dataset bias (e.g., "any request" → mislearned as "payment_request").  
+4. Summarize the likely overfitting rules the model has implicitly learned.  
+5. Output the findings in a structured list of similarity patterns.

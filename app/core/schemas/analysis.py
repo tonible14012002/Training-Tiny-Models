@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Optional, Any
 from .workflow import Sample
 
 class Prediction(BaseModel):
@@ -49,12 +49,28 @@ class OpenIntentAnalysis(BaseModel):
     false_positive_rate: float
     misclassified: List[MisclassifiedOpenIntent]
 
+class ErrorCase(BaseModel):
+    """Represents a single error case with input and predictions"""
+    input: Sample
+    true_label: str
+    predicted_label: str
+    confidence: float
+    distance: Optional[float] = None
+
+class ErrorsByLabel(BaseModel):
+    """Groups error cases by label"""
+    false_positives: List[ErrorCase]  # Cases predicted as this label but shouldn't be
+    false_negatives: List[ErrorCase]  # Cases that should be this label but weren't predicted as such
+
+
 class EvaluationResult(BaseModel):
     overall: OverallMetrics
     per_label: Dict[str, LabelMetrics]
     adb_info: Optional[Dict[str, Any]] = None
     test_cases: Optional[List[TestCase]] = None
     open_intent_analysis: Optional[OpenIntentAnalysis] = None
+    unknown_analysis: Optional[Dict[str, Any]] = None
+    errors_by_label: Optional[Dict[str, ErrorsByLabel]] = None  # Grouped FP/FN by label
 
 
 class ErrorBucket(BaseModel):

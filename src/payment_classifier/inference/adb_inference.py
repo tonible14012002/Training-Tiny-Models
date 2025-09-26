@@ -211,7 +211,16 @@ class ADBModelInference:
         return predictions
 
     def evaluate_with_adb(self, data: Dataset) -> dict:
-        """Evaluate model performance using ADB on a dataset with ground truth labels."""
+        """
+        Evaluate model performance using ADB on a dataset with ground truth labels.
+
+        IMPORTANT: This method evaluates on KNOWN intents only. All samples in the dataset
+        are expected to be valid known intents, so they should NOT be predicted as "Unknown".
+        The "Unknown" prediction is treated as a classification error (false negative for
+        the true label, false positive for Unknown class).
+
+        For testing Unknown/OOD detection capability, use _analyze_open_intents() instead.
+        """
         self.check_adb()
         assert self.intent_centers is not None and self.intent_radii is not None, (
             "ADB parameters not loaded. Please ensure ADB data was properly calculated and saved."
@@ -360,6 +369,21 @@ class ADBModelInference:
         macro_f1 = macro_f1_sum / valid_labels if valid_labels > 0 else 0.0
         # macro_accuracy = macro_accuracy_sum / valid_labels if valid_labels > 0 else 0.0
 
+        # Validate known intent true negative requirement:
+        # All samples in evaluation dataset are known intents, so they should NOT be predicted as "Unknown"
+        known_intent_true_negative_rate = (total_samples - unknown_predictions) / total_samples if total_samples > 0 else 0.0
+
+        # Create detailed breakdown of unknown predictions by true label
+        unknown_predictions_by_label = {}
+        for true_label_str in label_total_counts.keys():
+            unknown_count = label_unknown_counts[true_label_str]
+            total_count = label_total_counts[true_label_str]
+            unknown_predictions_by_label[true_label_str] = {
+                "unknown_predictions": unknown_count,
+                "total_samples": total_count,
+                "unknown_rate": unknown_count / total_count if total_count > 0 else 0.0
+            }
+
         return {
             "overall": {
                 "accuracy": accuracy,
@@ -370,9 +394,197 @@ class ADBModelInference:
                 "macro_f1": macro_f1,
                 "total_samples": total_samples,
                 "correct_predictions": correct,
-                "unknown_predictions": unknown_predictions
+                "unknown_predictions": unknown_predictions,
+                "known_intent_true_negative_rate": known_intent_true_negative_rate
             },
             "per_label": per_label_metrics,
+            "unknown_predictions_breakdown": unknown_predictions_by_label,
+            "adb_info": {
+                "radii": self.intent_radii,
+                "labels": self.id2label
+            }
+        }
+
+    def evaluate_with_unknown_intents(self, known_intent_data: Dataset, unknown_intent_texts: List[str]) -> dict:
+        """
+        Comprehensive evaluation that treats "Unknown" as a proper label to be tested on both:
+        1. Known intents (should NOT be predicted as Unknown - true negatives)
+        2. Unknown intents (should BE predicted as Unknown - true positives)
+
+        Args:
+            known_intent_data: Dataset with known intents (same as regular evaluation dataset)
+            unknown_intent_texts: List of texts that represent unknown/out-of-domain intents
+
+        Returns:
+            dict: Comprehensive metrics including Unknown label performance
+        """
+        self.check_adb()
+        assert self.intent_centers is not None and self.intent_radii is not None, (
+            "ADB parameters not loaded. Please ensure ADB data was properly calculated and saved."
+        )
+
+        # Get predictions for known intents
+        known_predictions = []
+        known_true_labels = []
+
+        batch_size = 32
+        for i in range(0, len(known_intent_data), batch_size):
+            batch = known_intent_data[i:i+batch_size]
+            texts = batch['msg']
+            true_labels = batch['label']
+
+            predictions = self.predict_with_adb(texts)
+            known_predictions.extend(predictions)
+            known_true_labels.extend(true_labels)
+
+        # Get predictions for unknown intents
+        unknown_predictions = []
+        unknown_true_labels = ["Unknown"] * len(unknown_intent_texts)  # All should be Unknown
+
+        for i in range(0, len(unknown_intent_texts), batch_size):
+            batch_texts = unknown_intent_texts[i:i+batch_size]
+            predictions = self.predict_with_adb(batch_texts)
+            unknown_predictions.extend(predictions)
+
+        # Combine all predictions and true labels
+        all_predictions = known_predictions + unknown_predictions
+        all_true_labels = [self.id2label[label] for label in known_true_labels] + unknown_true_labels
+
+        total_samples = len(all_predictions)
+
+        # Initialize counters for all labels including "Unknown"
+        all_labels = set(self.id2label.values()) | {"Unknown"}
+
+        true_positives = defaultdict(int)
+        false_positives = defaultdict(int)
+        true_negatives = defaultdict(int)
+        false_negatives = defaultdict(int)
+
+        correct = 0
+        unknown_predictions_count = 0
+
+        # Calculate metrics
+        for pred, true_label_str in zip(all_predictions, all_true_labels):
+            pred_label = pred["label"]
+
+            if pred_label == "Unknown":
+                unknown_predictions_count += 1
+
+            # Overall accuracy
+            if pred_label == true_label_str:
+                correct += 1
+
+            # Binary classification metrics for each label
+            for label in all_labels:
+                true_is_label = (true_label_str == label)
+                pred_is_label = (pred_label == label)
+
+                if true_is_label and pred_is_label:
+                    true_positives[label] += 1
+                elif not true_is_label and pred_is_label:
+                    false_positives[label] += 1
+                elif true_is_label and not pred_is_label:
+                    false_negatives[label] += 1
+                else:
+                    true_negatives[label] += 1
+
+        # Calculate per-label metrics
+        per_label_metrics = {}
+        macro_precision_sum = 0
+        macro_recall_sum = 0
+        macro_f1_sum = 0
+        valid_labels = 0
+
+        for label in all_labels:
+            tp = true_positives[label]
+            fp = false_positives[label]
+            tn = true_negatives[label]
+            fn = false_negatives[label]
+
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+            recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+            f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+            accuracy = (tp + tn) / total_samples
+
+            actual_samples = tp + fn
+
+            # Calculate coverage for each label
+            # For known labels: coverage = samples correctly predicted as this label / total samples of this label
+            # For Unknown label: coverage represents detection capability
+            if label == "Unknown":
+                # For Unknown, coverage = successfully detected unknown intents / total unknown intents
+                total_unknown_intents = len(unknown_intent_texts)
+                label_coverage = tp / total_unknown_intents if total_unknown_intents > 0 else 0.0
+            else:
+                # For known labels, coverage = true positives / (true positives + false negatives)
+                # This represents: correctly identified samples of this label / all actual samples of this label
+                label_coverage = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+
+            per_label_metrics[label] = {
+                "accuracy": accuracy,
+                "coverage": label_coverage,
+                "precision": precision,
+                "recall": recall,
+                "f1_score": f1,
+                "samples": actual_samples,
+                "true_positives": tp,
+                "false_positives": fp,
+                "true_negatives": tn,
+                "false_negatives": fn
+            }
+
+            # Include in macro averages if the label exists in the dataset
+            if actual_samples > 0:
+                macro_precision_sum += precision
+                macro_recall_sum += recall
+                macro_f1_sum += f1
+                valid_labels += 1
+
+        # Calculate macro averages
+        macro_precision = macro_precision_sum / valid_labels if valid_labels > 0 else 0.0
+        macro_recall = macro_recall_sum / valid_labels if valid_labels > 0 else 0.0
+        macro_f1 = macro_f1_sum / valid_labels if valid_labels > 0 else 0.0
+
+        overall_accuracy = correct / total_samples if total_samples > 0 else 0.0
+
+        # Calculate coverage and unknown rate for compatibility with OverallMetrics schema
+        # Coverage: portion of samples that were NOT predicted as Unknown
+        coverage = (total_samples - unknown_predictions_count) / total_samples if total_samples > 0 else 0.0
+        # Unknown rate: portion of samples predicted as Unknown
+        unknown_rate = unknown_predictions_count / total_samples if total_samples > 0 else 0.0
+
+        # Specific Unknown label analysis
+        unknown_tp = true_positives["Unknown"]  # Unknown intents correctly identified as Unknown
+        unknown_fp = false_positives["Unknown"]  # Known intents incorrectly identified as Unknown
+        unknown_tn = true_negatives["Unknown"]   # Known intents correctly NOT identified as Unknown
+        unknown_fn = false_negatives["Unknown"]  # Unknown intents incorrectly identified as known intent
+
+        return {
+            "overall": {
+                "accuracy": overall_accuracy,
+                "coverage": coverage,
+                "unknown_rate": unknown_rate,
+                "macro_precision": macro_precision,
+                "macro_recall": macro_recall,
+                "macro_f1": macro_f1,
+                "total_samples": total_samples,
+                "correct_predictions": correct,
+                "unknown_predictions": unknown_predictions_count,
+                "known_intent_samples": len(known_intent_data),
+                "unknown_intent_samples": len(unknown_intent_texts)
+            },
+            "per_label": per_label_metrics,
+            "unknown_analysis": {
+                "true_positives": unknown_tp,  # Unknown correctly identified
+                "false_positives": unknown_fp,  # Known incorrectly identified as Unknown
+                "true_negatives": unknown_tn,   # Known correctly NOT identified as Unknown
+                "false_negatives": unknown_fn,  # Unknown incorrectly identified as known
+                "precision": per_label_metrics["Unknown"]["precision"],
+                "recall": per_label_metrics["Unknown"]["recall"],
+                "f1_score": per_label_metrics["Unknown"]["f1_score"],
+                "unknown_detection_rate": unknown_tp / len(unknown_intent_texts) if len(unknown_intent_texts) > 0 else 0.0,
+                "false_positive_rate": unknown_fp / len(known_intent_data) if len(known_intent_data) > 0 else 0.0
+            },
             "adb_info": {
                 "radii": self.intent_radii,
                 "labels": self.id2label
