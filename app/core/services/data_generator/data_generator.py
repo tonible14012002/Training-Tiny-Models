@@ -12,13 +12,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 class DataGenerator:
-    NUMBER_PER_ITER = 15
-    MAX_GEN_PER_ITER = 25
+    NUMBER_PER_ITER = 30
+    MAX_GEN_PER_BATCH = 25
 
     SEED_PROMPT_KEY = "train/seed"
-    EVAL_PROMPT_KEY = "eval/eval_seed"
-    NUMBER_EVAL_PER_ITER = 10
-    MAX_GEN_EVAL_PER_ITER = 20
+    R = 20
 
     def __init__(self, llm: BaseLLM, prompt_mgr: BasePromptManager, data_manager: DataManager, eval_data_manager: EvalDataManager = None):
         self.llm = llm
@@ -55,10 +53,10 @@ class DataGenerator:
         Generate data from given seed and prompt
         '''
         seed_rd = random.randint(0, 1000)
-        personas = self.personas_ds["train"].shuffle(seed=seed_rd).select(range(self.MAX_GEN_PER_ITER))
+        personas = self.personas_ds["train"].shuffle(seed=seed_rd).select(range(self.MAX_GEN_PER_BATCH))
         personas_txt = "\n- ".join([p['persona'] for p in personas])
 
-        seed_examples_txt = "\n".join([f"- {s.text}" for s in seed])
+        seed_examples_txt = "\n".join([f"- {s.msg}" for s in seed])
         prompt = self.prompt_mgr.get_prompt(self.SEED_PROMPT_KEY).format(personas=personas_txt)
 
         user_input = f"## Examples: {seed_examples_txt} \nContinue generate {self.NUMBER_PER_ITER} diverse examples"

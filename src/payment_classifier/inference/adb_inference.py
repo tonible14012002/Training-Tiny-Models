@@ -126,24 +126,24 @@ class ADBModelInference:
                     label_sums[label] += emb
                     label_counts[label] += 1
                     label_embeddings[label].append(emb.cpu())  # Store on CPU to save GPU memory
-        
+
         # Calculate centers
         intent_centers = {}
         for label in label_sums.keys():
             intent_centers[label] = label_sums[label] / label_counts[label]
-        
+
         # Calculate optimized radii
         intent_radii = {}
         for label, center in intent_centers.items():
             embeddings_tensor = torch.stack(label_embeddings[label])  # [num_samples, 128]
-            
+
             # Calculate distances from center to all training samples
             distances = torch.norm(embeddings_tensor - center.unsqueeze(0), dim=1)
-            
+
             # Use percentile-based radius for tight boundary
             radius = torch.quantile(distances, confidence_ratio)
             intent_radii[label] = radius.item()
-        
+
         self.intent_centers = intent_centers
         self.intent_radii = intent_radii
 
@@ -180,7 +180,6 @@ class ADBModelInference:
             closest_intent = None
             for label_id, center in self.intent_centers.items():
                 distance = torch.norm(emb - center.to(self.device)).item()
-                print(f"Label {self.id2label[label_id]}: Distance {distance}, Radius {self.intent_radii[label_id]}")
 
                 if distance < self.intent_radii[label_id]:
                     detected_intents.append((label_id, probs[i, label_id].item(), distance))
@@ -234,82 +233,132 @@ class ADBModelInference:
             all_predictions.extend(predictions)
             all_true_labels.extend(true_labels)
 
-        # Calculate metrics
+        # Calculate metrics using proper binary classification for each label
+        total_samples = len(all_predictions)
         correct = 0
         unknown_predictions = 0
 
-        # For precision/recall/F1 calculation
+        # Initialize counters for all labels including "Unknown"
+        all_labels = set(self.id2label.values()) | {"Unknown"}
+
+        # For each label, treat as binary classification: this_label vs not_this_label
         true_positives = defaultdict(int)
         false_positives = defaultdict(int)
+        true_negatives = defaultdict(int)
         false_negatives = defaultdict(int)
-        label_stats = defaultdict(lambda: {"correct": 0, "total": 0, "unknown": 0})
+
+        # Track coverage: for each true label, how many were predicted as Unknown
+        label_unknown_counts = defaultdict(int)
+        label_total_counts = defaultdict(int)
 
         for pred, true_label in zip(all_predictions, all_true_labels):
             true_label_str = self.id2label[true_label]
             pred_label = pred["label"]
 
-            label_stats[true_label_str]["total"] += 1
-
             if pred_label == "Unknown":
                 unknown_predictions += 1
-                label_stats[true_label_str]["unknown"] += 1
-                # Unknown predictions count as false negatives for the true label
-                false_negatives[true_label_str] += 1
-            elif pred_label == true_label_str:
+
+            # Overall accuracy: exact match
+            if pred_label == true_label_str:
                 correct += 1
-                label_stats[true_label_str]["correct"] += 1
-                true_positives[pred_label] += 1
-            else:
-                # Wrong prediction: false positive for predicted label, false negative for true label
-                false_positives[pred_label] += 1
-                false_negatives[true_label_str] += 1
+
+            # Track coverage data
+            label_total_counts[true_label_str] += 1
+            if pred_label == "Unknown":
+                label_unknown_counts[true_label_str] += 1
+
+            # For each possible label, calculate binary classification metrics
+            for label in all_labels:
+                # True label is this label: positive class
+                # True label is not this label: negative class
+                true_is_label = (true_label_str == label)
+                pred_is_label = (pred_label == label)
+
+                if true_is_label and pred_is_label:
+                    true_positives[label] += 1  # Correctly predicted as this label
+                elif not true_is_label and pred_is_label:
+                    false_positives[label] += 1  # Incorrectly predicted as this label
+                elif true_is_label and not pred_is_label:
+                    false_negatives[label] += 1  # Should be this label but predicted as something else
+                else:  # not true_is_label and not pred_is_label
+                    true_negatives[label] += 1  # Correctly predicted as NOT this label
 
         # Calculate overall metrics
-        total_samples = len(all_predictions)
         accuracy = correct / total_samples if total_samples > 0 else 0.0
         unknown_rate = unknown_predictions / total_samples if total_samples > 0 else 0.0
         coverage = (total_samples - unknown_predictions) / total_samples if total_samples > 0 else 0.0
 
-        # Calculate per-label metrics including precision, recall, F1
+        # Calculate per-label metrics
         per_label_metrics = {}
-        all_labels = set(self.id2label.values())
 
         macro_precision_sum = 0
         macro_recall_sum = 0
         macro_f1_sum = 0
+        macro_accuracy_sum = 0
         valid_labels = 0
 
         for label in all_labels:
-            if label_stats[label]["total"] > 0:
-                tp = true_positives[label]
-                fp = false_positives[label]
-                fn = false_negatives[label]
+            tp = true_positives[label]
+            fp = false_positives[label]
+            tn = true_negatives[label]
+            fn = false_negatives[label]
 
-                precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-                recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-                f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+            # Every label should be evaluated on the ENTIRE evaluation set
+            # So tp + fp + tn + fn should always equal total_samples
+            assert tp + fp + tn + fn == total_samples, f"Binary classification counts don't add up for label {label}: {tp + fp + tn + fn} != {total_samples}"
 
-                per_label_metrics[label] = {
-                    "accuracy": label_stats[label]["correct"] / label_stats[label]["total"],
-                    "coverage": (label_stats[label]["total"] - label_stats[label]["unknown"]) / label_stats[label]["total"],
-                    "precision": precision,
-                    "recall": recall,
-                    "f1_score": f1,
-                    "samples": label_stats[label]["total"],
-                    "true_positives": tp,
-                    "false_positives": fp,
-                    "false_negatives": fn
-                }
+            # Calculate standard binary classification metrics
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+            recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+            f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+            label_accuracy = (tp + tn) / total_samples
 
+            # Count actual samples of this label in the dataset (positive class)
+            actual_samples = tp + fn  # True positives + false negatives = all actual instances
+
+            # Calculate coverage for this label (portion of this label's samples that were not predicted as Unknown)
+            if label == "Unknown":
+                # For Unknown label, coverage represents how well we identify truly unknown samples
+                # But in this context, "Unknown" is a prediction, not a true label
+                # So coverage doesn't make sense for Unknown predictions
+                label_coverage = 1.0
+            else:
+                # Coverage = (samples of this label predicted as anything except Unknown) / total samples of this label
+                total_samples_of_label = label_total_counts[label]
+                unknown_predictions_of_label = label_unknown_counts[label]
+                if total_samples_of_label > 0:
+                    label_coverage = (total_samples_of_label - unknown_predictions_of_label) / total_samples_of_label
+                else:
+                    # If no samples of this label exist in dataset, coverage is undefined, set to 1.0
+                    label_coverage = 1.0
+
+            per_label_metrics[label] = {
+                "accuracy": label_accuracy,
+                "coverage": label_coverage,
+                "precision": precision,
+                "recall": recall,
+                "f1_score": f1,
+                "samples": actual_samples,
+                "true_positives": tp,
+                "false_positives": fp,
+                "true_negatives": tn,
+                "false_negatives": fn
+            }
+
+            # Only include labels that actually exist in the dataset for macro averages
+            # (i.e., labels that have at least one true positive or false negative)
+            if actual_samples > 0:
                 macro_precision_sum += precision
                 macro_recall_sum += recall
                 macro_f1_sum += f1
+                macro_accuracy_sum += label_accuracy
                 valid_labels += 1
 
         # Calculate macro averages
         macro_precision = macro_precision_sum / valid_labels if valid_labels > 0 else 0.0
         macro_recall = macro_recall_sum / valid_labels if valid_labels > 0 else 0.0
         macro_f1 = macro_f1_sum / valid_labels if valid_labels > 0 else 0.0
+        # macro_accuracy = macro_accuracy_sum / valid_labels if valid_labels > 0 else 0.0
 
         return {
             "overall": {

@@ -22,6 +22,6 @@ class LLMSettings(BaseModel):
     api_key: str = Field(default="", description="API Key for LLM")
     llm_model_name: str = Field(default="", description="LLM's model name")
     temperature: float = Field(default=0.15, description="Temperature value of LLM")
-    max_tokens: int = Field(default=512, description="Maximum number of tokens for generation")
+    max_tokens: int = Field(default=1024, description="Maximum number of tokens for generation")
     num_retries: int = Field(default=5, description="Number of retries")
     additional_params: Optional[Dict[str, Any]] = Field(default_factory=dict)

@@ -17,6 +17,15 @@ import json
 from pathlib import Path
 
 from src.payment_classifier.inference.adb_inference import ADBModelInference
+from app.core.mixins.numerical_file_access import NumericalFileAccessMixin
+
+
+class CheckpointManager(NumericalFileAccessMixin):
+    """Helper class to manage checkpoint loading"""
+
+    @property
+    def base_directory(self) -> str:
+        return ".checkpoints"
 
 
 def load_training_dataset(data_path: str) -> Dataset:
@@ -111,9 +120,17 @@ def plot_radius_distributions(label_distances, intent_radii, id2label):
 
 def main():
     # Configuration
-    checkpoint_path = ".checkpoints/16"  # Latest checkpoint with ADB data
     data_path = ".cache/.data.jsonl"
 
+    # Auto-load latest checkpoint
+    checkpoint_manager = CheckpointManager()
+    latest_checkpoint_path = checkpoint_manager.get_latest_item_path()
+
+    if latest_checkpoint_path is None:
+        print("Error: No checkpoints found in .checkpoints/ directory")
+        return
+
+    checkpoint_path = str(latest_checkpoint_path)
     print(f"Loading model from: {checkpoint_path}")
     print(f"Loading dataset from: {data_path}")
 

@@ -270,3 +270,42 @@ async def generate_open_intent_data(request: Request):
         "messages_generated": len(open_intent_messages),
         "sample_messages": open_intent_messages[:5]  # Show first 5 as examples
     }
+
+@router.post("/auto-train-pipeline")
+async def start_auto_training_pipeline(
+    request: Request,
+    max_iterations: int = 10,
+    target_accuracy: float = 0.85,
+    target_macro_f1: float = 0.80,
+    early_termination_threshold: float = 0.02,
+    data_generation_batch_size: int = 15
+):
+    """
+    Start the automated training pipeline that iteratively:
+    1. Generates new training data
+    2. Trains model with updated dataset
+    3. Evaluates model performance
+    4. Checks for improvement and termination conditions
+    5. Repeats until target metrics are achieved or max iterations reached
+
+    Pipeline includes early termination if no significant improvement is seen
+    over multiple consecutive iterations.
+    """
+    training_orchestrator: services.TrainingOrchestrator = request.app.state.training_orchestrator
+
+    # Create pipeline configuration
+    from app.core.schemas.orchestrator import PipelineConfig
+
+    config = PipelineConfig(
+        max_iterations=max_iterations,
+        target_accuracy=target_accuracy,
+        target_macro_f1=target_macro_f1,
+        early_termination_threshold=early_termination_threshold,
+        data_generation_batch_size=data_generation_batch_size
+    )
+
+    # Start the pipeline
+    result = await training_orchestrator.start_auto_training_pipeline(config)
+
+    return result
+

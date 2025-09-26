@@ -69,6 +69,15 @@ async def lifespan(app: FastAPI):
         data_manager=data_manager
     )
 
+    logger.info("Initializing training orchestrator...")
+    training_orchestrator = services.TrainingOrchestrator(
+        data_generator=data_generator,
+        trainer_service=trainer_service,
+        model_analyzer=model_analyzer,
+        data_manager=data_manager,
+        eval_data_manager=eval_data_manager
+    )
+
     app.state.data_manager = data_manager
     app.state.eval_data_manager = eval_data_manager
     app.state.data_generator = data_generator
@@ -76,6 +85,7 @@ async def lifespan(app: FastAPI):
     app.state.prompt_mgr = prompt_mgr
     app.state.trainer_service = trainer_service
     app.state.model_analyzer = model_analyzer
+    app.state.training_orchestrator = training_orchestrator
 
     yield  # The app runs here
 

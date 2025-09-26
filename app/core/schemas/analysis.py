@@ -22,6 +22,7 @@ class LabelMetrics(BaseModel):
     samples: int
     true_positives: int
     false_positives: int
+    true_negatives: int
     false_negatives: int
 
 class OverallMetrics(BaseModel):

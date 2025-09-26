@@ -3,8 +3,6 @@ import logging
 from typing import List
 from datasets import load_dataset
 from pydantic import BaseModel
-
-from app.core import schemas
 from app.core.schemas.workflow import Sample, Result
 from app.core.services.data_manager.data_manager import DataManager
 from app.core.services.eval_data_manager.eval_data_manager import EvalDataManager
@@ -17,7 +15,7 @@ class EvalGenerator:
 
     NUMBER_PER_ITER = 15
     MAX_GEN_PER_ITER = 25
-    NUMBER_EVAL_PER_ITER = 3
+    NUMBER_EVAL_PER_ITER = 20
 
     EVAL_PROMPT_KEY = "eval/seed"
     OPEN_INTENT_PROMPT_KEY = "eval/open_intent"
