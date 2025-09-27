@@ -8,7 +8,6 @@ class IterationMetrics(BaseModel):
     iteration: int
     accuracy: float = Field(..., ge=0.0, le=1.0, description="Model accuracy (0-1)")
     macro_f1: float = Field(..., ge=0.0, le=1.0, description="Macro F1-score (0-1)")
-    coverage: float = Field(..., ge=0.0, le=1.0, description="Coverage rate (0-1)")
     unknown_rate: float = Field(..., ge=0.0, le=1.0, description="Unknown prediction rate (0-1)")
     total_samples: int = Field(..., gt=0, description="Total number of evaluation samples")
     checkpoint_path: str = Field(..., description="Path to the model checkpoint")

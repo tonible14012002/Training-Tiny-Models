@@ -12,7 +12,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class DataGenerator:
-    TOTAL_MESSAGE_PER_BATCH = 30
+    TOTAL_MESSAGE_PER_BATCH = 50
     TOTAL_BATCH_PER_GEN = 25
 
     SEED_PROMPT_KEY = "train/seed"
@@ -67,4 +67,24 @@ class DataGenerator:
         ], Result)).messages
 
         return data
-        """Get default seed samples for evaluation generation."""
+        """Get default seed samples for evaluation generatioGo."""
+    
+    async def _gen_open_intent(self, seed: List[Sample]) -> List[Sample]:
+        '''
+        Generate data from given seed and prompt
+        '''
+        seed_rd = random.randint(0, 1000)
+        personas = self.personas_ds["train"].shuffle(seed=seed_rd).select(range(self.TOTAL_BATCH_PER_GEN))
+        personas_txt = "\n- ".join([p['persona'] for p in personas])
+
+        seed_examples_txt = "\n".join([f"- {s.msg}" for s in seed])
+        prompt = self.prompt_mgr.get_prompt(self.SEED_PROMPT_KEY).format(personas=personas_txt)
+
+        user_input = f"## Examples: {seed_examples_txt} \nContinue generate {self.TOTAL_MESSAGE_PER_BATCH} diverse examples"
+
+        data = (await self.llm.generate_structured_output([
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": user_input}
+        ], Result)).messages
+
+        return data

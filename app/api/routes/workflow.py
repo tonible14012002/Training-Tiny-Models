@@ -130,7 +130,8 @@ async def evaluate_model(
         evaluation_result = model_analyzer.analyze_model(
             evaluation_dataset=eval_dataset,
             open_intent_samples=open_intent_samples,
-            include_test_cases=payload.include_test_cases
+            include_test_cases=payload.include_test_cases,
+            use_comprehensive_unknown_evaluation=False  # Use simple evaluation to get misclassified details
         )
 
         # # Generate analysis report
@@ -205,46 +206,6 @@ async def inference_model(request: Request, payload: schemas.InferenceRequest):
             "predictions": output,
             "adb_info": adb_info
         }
-    }
-
-@router.post("/calc-adb")
-async def calc_adb(request: Request):
-    """Calculate ADB metric on dev/test sets."""
-    trainer_service: services.TrainerService = request.app.state.trainer_service
-    data_manager: services.DataManager = request.app.state.data_manager
-
-    ds = data_manager.to_datasets()
-
-    checkpoint_pth = trainer_service.get_latest_item_path()
-    print(f"Using checkpoint: {checkpoint_pth}")
-
-    inferencer = ADBModelInference(checkpoint_pth)
-    inferencer.calc_adb(ds)
-
-    return {
-        "message": "ADB calculation completed",
-        "status": "completed",
-    }
-
-@router.post("/evaluate-adb")
-async def evaluate_adb(request: Request):
-    """Evaluate model performance using ADB on current dataset."""
-    trainer_service: services.TrainerService = request.app.state.trainer_service
-    data_manager: services.DataManager = request.app.state.data_manager
-
-    # Get dataset and latest checkpoint
-    ds = data_manager.to_datasets()
-    checkpoint_pth = trainer_service.get_latest_item_path()
-    logger.info(f"Using checkpoint: {checkpoint_pth}")
-
-    # Run ADB evaluation
-    inferencer = ADBModelInference(checkpoint_pth)
-    evaluation_results = inferencer.evaluate_with_adb(ds)
-
-    return {
-        "message": "ADB evaluation completed",
-        "status": "completed",
-        "results": evaluation_results
     }
 
 @router.post("/auto-train-pipeline")

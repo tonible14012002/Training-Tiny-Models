@@ -170,6 +170,7 @@ class ADBModelInference:
 
         with torch.no_grad():
             outputs = self.peft_model(**inputs, output_hidden_states=True)
+            print(outputs)
             cls_embeddings = outputs.hidden_states[-1][:, 0, :]  # CLS token
             probs = outputs.logits.softmax(dim=-1)
 
@@ -256,9 +257,6 @@ class ADBModelInference:
         true_negatives = defaultdict(int)
         false_negatives = defaultdict(int)
 
-        # Track coverage: for each true label, how many were predicted as Unknown
-        label_unknown_counts = defaultdict(int)
-        label_total_counts = defaultdict(int)
 
         for pred, true_label in zip(all_predictions, all_true_labels):
             true_label_str = self.id2label[true_label]
@@ -271,10 +269,6 @@ class ADBModelInference:
             if pred_label == true_label_str:
                 correct += 1
 
-            # Track coverage data
-            label_total_counts[true_label_str] += 1
-            if pred_label == "Unknown":
-                label_unknown_counts[true_label_str] += 1
 
             # For each possible label, calculate binary classification metrics
             for label in all_labels:
@@ -295,7 +289,6 @@ class ADBModelInference:
         # Calculate overall metrics
         accuracy = correct / total_samples if total_samples > 0 else 0.0
         unknown_rate = unknown_predictions / total_samples if total_samples > 0 else 0.0
-        coverage = (total_samples - unknown_predictions) / total_samples if total_samples > 0 else 0.0
 
         # Calculate per-label metrics
         per_label_metrics = {}
@@ -325,25 +318,9 @@ class ADBModelInference:
             # Count actual samples of this label in the dataset (positive class)
             actual_samples = tp + fn  # True positives + false negatives = all actual instances
 
-            # Calculate coverage for this label (portion of this label's samples that were not predicted as Unknown)
-            if label == "Unknown":
-                # For Unknown label, coverage represents how well we identify truly unknown samples
-                # But in this context, "Unknown" is a prediction, not a true label
-                # So coverage doesn't make sense for Unknown predictions
-                label_coverage = 1.0
-            else:
-                # Coverage = (samples of this label predicted as anything except Unknown) / total samples of this label
-                total_samples_of_label = label_total_counts[label]
-                unknown_predictions_of_label = label_unknown_counts[label]
-                if total_samples_of_label > 0:
-                    label_coverage = (total_samples_of_label - unknown_predictions_of_label) / total_samples_of_label
-                else:
-                    # If no samples of this label exist in dataset, coverage is undefined, set to 1.0
-                    label_coverage = 1.0
 
             per_label_metrics[label] = {
                 "accuracy": label_accuracy,
-                "coverage": label_coverage,
                 "precision": precision,
                 "recall": recall,
                 "f1_score": f1,
@@ -373,21 +350,9 @@ class ADBModelInference:
         # All samples in evaluation dataset are known intents, so they should NOT be predicted as "Unknown"
         known_intent_true_negative_rate = (total_samples - unknown_predictions) / total_samples if total_samples > 0 else 0.0
 
-        # Create detailed breakdown of unknown predictions by true label
-        unknown_predictions_by_label = {}
-        for true_label_str in label_total_counts.keys():
-            unknown_count = label_unknown_counts[true_label_str]
-            total_count = label_total_counts[true_label_str]
-            unknown_predictions_by_label[true_label_str] = {
-                "unknown_predictions": unknown_count,
-                "total_samples": total_count,
-                "unknown_rate": unknown_count / total_count if total_count > 0 else 0.0
-            }
-
         return {
             "overall": {
                 "accuracy": accuracy,
-                "coverage": coverage,
                 "unknown_rate": unknown_rate,
                 "macro_precision": macro_precision,
                 "macro_recall": macro_recall,
@@ -398,7 +363,6 @@ class ADBModelInference:
                 "known_intent_true_negative_rate": known_intent_true_negative_rate
             },
             "per_label": per_label_metrics,
-            "unknown_predictions_breakdown": unknown_predictions_by_label,
             "adb_info": {
                 "radii": self.intent_radii,
                 "labels": self.id2label
@@ -508,21 +472,9 @@ class ADBModelInference:
 
             actual_samples = tp + fn
 
-            # Calculate coverage for each label
-            # For known labels: coverage = samples correctly predicted as this label / total samples of this label
-            # For Unknown label: coverage represents detection capability
-            if label == "Unknown":
-                # For Unknown, coverage = successfully detected unknown intents / total unknown intents
-                total_unknown_intents = len(unknown_intent_texts)
-                label_coverage = tp / total_unknown_intents if total_unknown_intents > 0 else 0.0
-            else:
-                # For known labels, coverage = true positives / (true positives + false negatives)
-                # This represents: correctly identified samples of this label / all actual samples of this label
-                label_coverage = tp / (tp + fn) if (tp + fn) > 0 else 0.0
 
             per_label_metrics[label] = {
                 "accuracy": accuracy,
-                "coverage": label_coverage,
                 "precision": precision,
                 "recall": recall,
                 "f1_score": f1,
@@ -547,9 +499,7 @@ class ADBModelInference:
 
         overall_accuracy = correct / total_samples if total_samples > 0 else 0.0
 
-        # Calculate coverage and unknown rate for compatibility with OverallMetrics schema
-        # Coverage: portion of samples that were NOT predicted as Unknown
-        coverage = (total_samples - unknown_predictions_count) / total_samples if total_samples > 0 else 0.0
+        # Calculate unknown rate for compatibility with OverallMetrics schema
         # Unknown rate: portion of samples predicted as Unknown
         unknown_rate = unknown_predictions_count / total_samples if total_samples > 0 else 0.0
 
@@ -562,7 +512,6 @@ class ADBModelInference:
         return {
             "overall": {
                 "accuracy": overall_accuracy,
-                "coverage": coverage,
                 "unknown_rate": unknown_rate,
                 "macro_precision": macro_precision,
                 "macro_recall": macro_recall,

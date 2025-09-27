@@ -138,7 +138,6 @@ class TrainingOrchestrator:
                     iteration=iteration,
                     accuracy=eval_result.overall.accuracy,
                     macro_f1=eval_result.overall.macro_f1,
-                    coverage=eval_result.overall.coverage,
                     unknown_rate=eval_result.overall.unknown_rate,
                     total_samples=eval_result.overall.total_samples,
                     checkpoint_path=checkpoint_path,
@@ -158,8 +157,7 @@ class TrainingOrchestrator:
                 self.logger.info(
                     f"Iteration {iteration} Results: "
                     f"Accuracy={iteration_metrics.accuracy:.3f}, "
-                    f"Macro-F1={iteration_metrics.macro_f1:.3f}, "
-                    f"Coverage={iteration_metrics.coverage:.3f}"
+                    f"Macro-F1={iteration_metrics.macro_f1:.3f}"
                 )
 
                 # Step 5: Check termination conditions
@@ -186,20 +184,17 @@ class TrainingOrchestrator:
                     "iteration": self.status.best_metrics.iteration,
                     "accuracy": self.status.best_metrics.accuracy,
                     "macro_f1": self.status.best_metrics.macro_f1,
-                    "coverage": self.status.best_metrics.coverage,
                     "checkpoint_path": self.status.best_metrics.checkpoint_path
                 } if self.status.best_metrics else None,
                 "final_metrics": {
                     "accuracy": self.status.last_metrics.accuracy,
                     "macro_f1": self.status.last_metrics.macro_f1,
-                    "coverage": self.status.last_metrics.coverage,
                 } if self.status.last_metrics else None,
                 "metrics_history": [
                     {
                         "iteration": m.iteration,
                         "accuracy": m.accuracy,
                         "macro_f1": m.macro_f1,
-                        "coverage": m.coverage,
                         "unknown_rate": m.unknown_rate,
                         "checkpoint_path": m.checkpoint_path
                     } for m in self.status.metrics_history
@@ -263,21 +258,18 @@ class TrainingOrchestrator:
             "last_metrics": {
                 "accuracy": self.status.last_metrics.accuracy,
                 "macro_f1": self.status.last_metrics.macro_f1,
-                "coverage": self.status.last_metrics.coverage,
                 "iteration": self.status.last_metrics.iteration
             } if self.status.last_metrics else None,
             "best_metrics": {
                 "accuracy": self.status.best_metrics.accuracy,
                 "macro_f1": self.status.best_metrics.macro_f1,
-                "coverage": self.status.best_metrics.coverage,
                 "iteration": self.status.best_metrics.iteration
             } if self.status.best_metrics else None,
             "metrics_history": [
                 {
                     "iteration": m.iteration,
                     "accuracy": m.accuracy,
-                    "macro_f1": m.macro_f1,
-                    "coverage": m.coverage
+                    "macro_f1": m.macro_f1
                 } for m in self.status.metrics_history
             ] if self.status.metrics_history else []
         }

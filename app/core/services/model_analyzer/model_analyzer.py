@@ -102,9 +102,15 @@ class ModelAnalyzer:
                        f"({open_intent_results['unknown_rate']:.2%})")
 
             # Convert to schema format
-            misclassified = [
-                MisclassifiedOpenIntent(**item) for item in open_intent_results["misclassified"]
-            ]
+            try:
+                misclassified = [
+                    MisclassifiedOpenIntent(**item) for item in open_intent_results["misclassified"]
+                ]
+                logger.info(f"Successfully converted {len(misclassified)} misclassified items to schema format")
+            except Exception as e:
+                logger.error(f"Error converting misclassified items to schema format: {e}")
+                logger.error(f"Raw misclassified data: {open_intent_results['misclassified']}")
+                misclassified = []  # Fallback to empty list
 
             open_intent_analysis = OpenIntentAnalysis(
                 total_samples=open_intent_results["total_samples"],
@@ -409,13 +415,22 @@ class ModelAnalyzer:
                     "distance": pred.get("dis", 0.0)
                 })
 
-        return {
+        result = {
             "total_samples": total_samples,
             "detected_as_unknown": detected_as_unknown,
             "unknown_rate": unknown_rate,
             "misclassified": misclassified,
             "false_positive_rate": (total_samples - detected_as_unknown) / total_samples if total_samples > 0 else 0.0
         }
+
+        # Add logging to track the data
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Open intent analysis results: {total_samples} total, {detected_as_unknown} detected as unknown, {len(misclassified)} misclassified")
+        if misclassified:
+            logger.info(f"Sample misclassified items: {misclassified[:2]}")
+
+        return result
 
     def generate_analysis_report(self, evaluation_result: EvaluationResult) -> str:
         """Generate a comprehensive analysis report"""
@@ -425,7 +440,6 @@ class ModelAnalyzer:
         overall = evaluation_result.overall
         report.append("=== MODEL ANALYSIS REPORT ===\n")
         report.append(f"Overall Accuracy: {overall.accuracy:.2%}")
-        report.append(f"Coverage: {overall.coverage:.2%}")
         report.append(f"Unknown Rate: {overall.unknown_rate:.2%}")
         report.append(f"Macro F1-Score: {overall.macro_f1:.3f}")
         report.append(f"Total Samples: {overall.total_samples}")
@@ -439,7 +453,6 @@ class ModelAnalyzer:
             report.append(f"  Precision: {metrics.precision:.3f}")
             report.append(f"  Recall: {metrics.recall:.3f}")
             report.append(f"  F1-Score: {metrics.f1_score:.3f}")
-            report.append(f"  Coverage: {metrics.coverage:.2%}")
             report.append(f"  Samples: {metrics.samples}")
 
         # Open intent analysis

@@ -52,11 +52,11 @@ class TrainerService(NumericalFileAccessMixin):
             logging_strategy="steps",
             output_dir=self.CHECKPOINT_DIR,
             # save_steps=100,
-            learning_rate=2e-4,
+            learning_rate=1e-5,
             per_device_train_batch_size=8,     # Smaller batches
             per_device_eval_batch_size=16,
             gradient_accumulation_steps=4,     # Effective batch size = 32
-            num_train_epochs=2,                # More epochs
+            num_train_epochs=3,                # More epochs
             warmup_ratio=0.15,                 # More warmup
             weight_decay=0.02,                 # Stronger regularization
             report_to="none",

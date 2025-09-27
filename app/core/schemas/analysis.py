@@ -15,7 +15,6 @@ class TestCase(BaseModel):
 
 class LabelMetrics(BaseModel):
     accuracy: float
-    coverage: float
     precision: float
     recall: float
     f1_score: float
@@ -27,7 +26,6 @@ class LabelMetrics(BaseModel):
 
 class OverallMetrics(BaseModel):
     accuracy: float
-    coverage: float
     unknown_rate: float
     macro_precision: float
     macro_recall: float
