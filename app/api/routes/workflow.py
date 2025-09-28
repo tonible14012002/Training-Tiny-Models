@@ -3,15 +3,39 @@
 from fastapi import APIRouter, Request
 from app.core import services
 from app.core import schemas
+from app.core.schemas.workflow import PAYMENT_LABEL_V2
 from src.payment_classifier.inference import ADBModelInference
+from src.payment_classifier.inference.prob_inference import ProbModelInference
 
 import json
 import logging
 from pydantic import TypeAdapter
 from typing import List
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/workflow", tags=["workflow"])
+
+
+def _detect_inference_type(checkpoint_path: str) -> str:
+    """Detect inference type from checkpoint metadata, fallback to ADB if not found"""
+    config_file = Path(checkpoint_path) / "inference_config.json"
+
+    if config_file.exists():
+        try:
+            with open(config_file, 'r') as f:
+                config = json.load(f)
+            return config.get("inference_type", "adb")
+        except (json.JSONDecodeError, KeyError):
+            logger.warning(f"Could not read inference config from {config_file}, defaulting to ADB")
+
+    # Fallback: check if ADB data exists
+    adb_file = Path(checkpoint_path) / "adb_data.json"
+    if adb_file.exists():
+        return "adb"
+
+    # Default to ADB for backward compatibility
+    return "adb"
 
 @router.post("/generate-data")
 async def generate_synthetic_data(request: Request):
@@ -22,7 +46,7 @@ async def generate_synthetic_data(request: Request):
         seed_data = json.load(f)
     logger.info(f"Loaded {len(seed_data)} seed examples from {path}")
     converted = [
-        {**seed, 'label': schemas.PAYMENT_LABEL.to_str(seed['label'])}
+        {**seed, 'label': PAYMENT_LABEL_V2.to_str(seed['label'])}
         for seed in seed_data
     ]
 
@@ -31,25 +55,46 @@ async def generate_synthetic_data(request: Request):
 
     return {"message": "Data generation started", "status": "in_progress"}
 
-@router.post("/fresh-generate-eval")
-async def generate_fresh_eval_data(request: Request):
-    """Generate fresh evaluation data using eval generator - both intent and open intent."""
-    eval_generator: services.EvalGenerator = request.app.state.eval_generator
+@router.post("/generate-data-v2")
+async def generate_synthetic_data_v2(request: Request):
+    """Generate synthetic data using DataGeneratorV2 with parallel processing."""
+    data_generator_v2: services.DataGeneratorV2 = request.app.state.data_generator_v2
     path = ".cache/human_seed.json"
-
-    # Load human seed data for intent generation
+    # load text from json file
     with open(path, "r") as f:
         seed_data = json.load(f)
     logger.info(f"Loaded {len(seed_data)} seed examples from {path}")
-
     converted = [
-        {**seed, 'label': schemas.PAYMENT_LABEL.to_str(seed['label'])}
+        {**seed, 'label': PAYMENT_LABEL_V2.to_str(seed['label'])}
         for seed in seed_data
     ]
 
     human_seeds = TypeAdapter(List[schemas.Sample]).validate_python(converted)
+    await data_generator_v2.fresh_gen(human_seeds)
+
+    return {"message": "Data generation v2 started with parallel processing", "status": "in_progress"}
+
+@router.post("/fresh-generate-eval")
+async def generate_fresh_eval_data(request: Request):
+    """Generate fresh evaluation data using eval generator - both intent and open intent."""
+    eval_generator: services.EvalGenerator = request.app.state.eval_generator
+    # path = ".cache/human_seed.json"
+
+    # # Load human seed data for intent generation
+    # with open(path, "r") as f:
+    #     seed_data = json.load(f)
+    # logger.info(f"Loaded {len(seed_data)} seed examples from {path}")
+
+    # converted = [
+    #     {**seed, 'label': PAYMENT_LABEL_V2.to_str(seed['label'])}
+    #     for seed in seed_data
+    # ]
+
+    human_seeds = []
+    # human_seeds = TypeAdapter(List[schemas.Sample]).validate_python(converted)
 
     # Optional: Load seed messages for open intent (can be empty for now)
+
     human_seed_messages = []  # Can be extended to load from a file
 
     # Generate fresh evaluation data (both intent and open intent)
@@ -65,15 +110,24 @@ async def generate_fresh_eval_data(request: Request):
     }
 
 @router.post("/train")
-async def train_student_model(request: Request):
+async def train_student_model(request: Request, inference_type: str = "adb"):
+    """Train model with specified inference type (adb or prob)"""
     data_manager: services.DataManager = request.app.state.data_manager
     trainer_service: services.TrainerService = request.app.state.trainer_service
 
+    if inference_type not in ["adb", "prob"]:
+        return {
+            "status": "error",
+            "message": "inference_type must be 'adb' or 'prob'"
+        }
+
     ds = data_manager.to_datasets()
-    await trainer_service.train(ds)
+    checkpoint_num = await trainer_service.train(ds, inference_type=inference_type)
 
     return {
-        "status": "training"
+        "status": "completed",
+        "checkpoint_number": checkpoint_num,
+        "inference_type": inference_type
     }
 
 @router.post("/evaluate")
@@ -125,19 +179,17 @@ async def evaluate_model(
             logger.info(f"Loaded {len(open_intent_samples) if open_intent_samples else 0} open intent samples")
 
         # Load model and run comprehensive evaluation
-        model_analyzer.load_model(str(checkpoint_path))
+        # For PAYMENT_LABEL_V2, always use probability-based inference
+        prob_inferencer = ProbModelInference(peft_path=str(checkpoint_path), label_config=PAYMENT_LABEL_V2)
+        model_analyzer.load_model(str(checkpoint_path), inferencer=prob_inferencer)
 
         evaluation_result = model_analyzer.analyze_model(
             evaluation_dataset=eval_dataset,
             open_intent_samples=open_intent_samples,
             include_test_cases=payload.include_test_cases,
-            use_comprehensive_unknown_evaluation=False  # Use simple evaluation to get misclassified details
         )
 
         # # Generate analysis report
-        # analysis_report = model_analyzer.generate_analysis_report(evaluation_result)
-
-        # Get error patterns grouped by (expected, predicted) tuples
         error_patterns = model_analyzer.get_error_patterns_from_result(evaluation_result.errors_by_label) if evaluation_result.errors_by_label else {}
 
         # Prepare evaluation data info
@@ -155,12 +207,7 @@ async def evaluate_model(
             "per_label_metrics": {k: v.model_dump() for k, v in evaluation_result.per_label.items()},
             "open_intent_analysis": evaluation_result.open_intent_analysis.model_dump() if evaluation_result.open_intent_analysis else None,
             "adb_info": evaluation_result.adb_info,
-            # "errors_by_label": {k: v.model_dump() for k, v in evaluation_result.errors_by_label.items()} if evaluation_result.errors_by_label else None,
             "error_patterns": {k: [case.model_dump() for case in cases] for k, cases in error_patterns.items()},
-            # "analysis_report": analysis_report,
-            # "error_buckets": [bucket.model_dump() for bucket in error_buckets],
-            # "total_test_cases": len(evaluation_result.test_cases) if evaluation_result.test_cases else 0,
-            # "test_cases": [tc.model_dump() for tc in evaluation_result.test_cases] if evaluation_result.test_cases else []
         }
 
         return schemas.EvaluationResponse(
@@ -186,25 +233,38 @@ async def inference_model(request: Request, payload: schemas.InferenceRequest):
     # Get latest checkpoint
     trainer_service: services.TrainerService = request.app.state.trainer_service
     checkpoint_pth = trainer_service.get_latest_item_path()
-    data_manager: services.DataManager = request.app.state.data_manager
 
-    # Run inference
-    inferencer = ADBModelInference(checkpoint_pth)
-    predictions = inferencer.predict_with_adb(payload.text)
+    if checkpoint_pth is None:
+        return {
+            "message": "No trained model checkpoint found",
+            "status": "error"
+        }
+
+    # Detect inference type from checkpoint
+    inference_type = _detect_inference_type(checkpoint_pth)
+
+    # Use appropriate inferencer
+    if inference_type == "prob":
+        inferencer = ProbModelInference(checkpoint_pth, label_config=PAYMENT_LABEL_V2)
+    else:
+        inferencer = ADBModelInference(checkpoint_pth, label_config=PAYMENT_LABEL_V2)
+
+    predictions = inferencer.predict(payload.text)
     output = [
         {"text": text, "predicted_label": label}
         for text, label in zip(payload.text, predictions)
     ]
 
-    adb_info = inferencer.info()
+    model_info = inferencer.info()
 
     return {
         "message": "Inference completed",
         "status": "completed",
         "results": {
-            "checkpiont": checkpoint_pth,
+            "checkpoint": checkpoint_pth,
+            "inference_type": inference_type,
             "predictions": output,
-            "adb_info": adb_info
+            "model_info": model_info
         }
     }
 
@@ -271,7 +331,9 @@ async def analyze_error_patterns(request: Request):
             }
 
         # Load model and get latest evaluation data
-        model_analyzer.load_model(checkpoint_path)
+        # For PAYMENT_LABEL_V2, always use probability-based inference
+        prob_inferencer = ProbModelInference(peft_path=str(checkpoint_path), label_config=PAYMENT_LABEL_V2)
+        model_analyzer.load_model(str(checkpoint_path), inferencer=prob_inferencer)
         evaluation_dataset = eval_data_manager.to_datasets()  # Load latest evaluation data
 
         if evaluation_dataset is None:
@@ -282,12 +344,14 @@ async def analyze_error_patterns(request: Request):
             }
 
         logger.info(f"Running model evaluation for error pattern analysis using checkpoint: {checkpoint_path}")
+        iteration_number = eval_data_manager.get_latest_item_number()
+        open_intent_samples = eval_data_manager.load_open_intent(iteration_number)
 
         # Run evaluation to get errors_by_label
         evaluation_result = model_analyzer.analyze_model(
             evaluation_dataset=evaluation_dataset,
+            open_intent_samples=open_intent_samples,
             include_test_cases=False,
-            use_comprehensive_unknown_evaluation=False
         )
 
         if not evaluation_result.errors_by_label:
@@ -316,7 +380,7 @@ async def analyze_error_patterns(request: Request):
             "message": f"Error pattern analysis completed. Analyzed {len(error_analyses)} error patterns.",
             "status": "completed",
             "checkpoint_path": checkpoint_path,
-            "error_analyses": [analysis.dict() for analysis in error_analyses],
+            "error_analyses": [analysis.model_dump() for analysis in error_analyses],
             "evaluation_summary": {
                 "overall_accuracy": evaluation_result.overall.accuracy,
                 "macro_f1": evaluation_result.overall.macro_f1,

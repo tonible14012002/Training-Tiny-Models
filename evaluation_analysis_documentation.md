@@ -20,7 +20,7 @@ ADB is a novel approach for intent classification that creates adaptive decision
 
 ### ADB Implementation Details
 
-#### Center Calculation (`calc_adb` method - lines 97-155)
+#### Center Calculation (`post_train` method - lines 97-155)
 ```python
 # Calculate centers as mean of class embeddings
 intent_centers[label] = label_sums[label] / label_counts[label]
@@ -29,7 +29,7 @@ intent_centers[label] = label_sums[label] / label_counts[label]
 radius = torch.quantile(distances, confidence_ratio)  # confidence_ratio = 0.9
 ```
 
-#### Prediction Logic (`predict_with_adb` method - lines 157-212)
+#### Prediction Logic (`predict` method - lines 157-212)
 - **Within Radius**: If embedding falls within the radius of an intent center, it's classified as that intent
 - **Multiple Intents**: If within multiple radii, chooses the one with highest softmax probability
 - **Unknown Intent**: If outside all radii, classified as "Unknown"

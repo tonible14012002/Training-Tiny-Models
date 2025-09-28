@@ -1,10 +1,10 @@
 # ADB Evaluation Metrics Explained
 
-This document explains the comprehensive evaluation metrics used in the `evaluate_with_adb` function from `/src/payment_classifier/inference/adb_inference.py`. The Angular Distance-Based (ADB) evaluation system provides detailed metrics for intent classification performance.
+This document explains the comprehensive evaluation metrics used in the `evaluate` function from `/src/payment_classifier/inference/adb_inference.py`. The Angular Distance-Based (ADB) evaluation system provides detailed metrics for intent classification performance.
 
 ## Overview
 
-The `evaluate_with_adb` function evaluates model performance using Angular Distance-Based classification on datasets with known ground truth labels. It treats classification as multiple binary problems (one-vs-all) and provides both overall and per-label metrics.
+The `evaluate` function evaluates model performance using Angular Distance-Based classification on datasets with known ground truth labels. It treats classification as multiple binary problems (one-vs-all) and provides both overall and per-label metrics.
 
 > **Important Note**: This evaluation is designed for KNOWN intents only. All samples are expected to be valid known intents and should NOT be predicted as "Unknown". The "Unknown" prediction is treated as a classification error.
 

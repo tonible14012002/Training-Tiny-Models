@@ -12,6 +12,7 @@ from app.api.dependencies import api_key_auth
 from app.api.routes import health, workflow
 from app.core.settings import settings, RELOAD_DIRS
 from app.core import services
+from app.core.schemas.workflow import PAYMENT_LABEL_V2
 
 from src.payment_classifier.llm.litellm import LiteLLMProvider
 from src.payment_classifier.llm.settings import LLMSettings
@@ -25,6 +26,7 @@ async def lifespan(app: FastAPI):
     """Application lifespan manager."""
     # Initialize resources before the app starts
     logger.info("Starting up fine-tuning workflow API...")
+    label_config = PAYMENT_LABEL_V2
 
     # Store settings in app state
     app.state.settings = settings
@@ -39,16 +41,25 @@ async def lifespan(app: FastAPI):
     prompt_mgr = InmemoryPromptManager()
 
     logger.info("Initializing data manager...")
-    data_manager = services.DataManager()
+    data_manager = services.DataManager(label_config)
 
     logger.info("Initializing eval data manager...")
-    eval_data_manager = services.EvalDataManager()
+    eval_data_manager = services.EvalDataManager(label_config)
 
     logger.info("Initializing data generator...")
     data_generator = services.DataGenerator(
         llm=teacher_llm,
         prompt_mgr=prompt_mgr,
         data_manager=data_manager,
+        eval_data_manager=eval_data_manager,
+    )
+
+    logger.info("Initializing data generator v2...")
+    data_generator_v2 = services.DataGeneratorV2(
+        llm=teacher_llm,
+        prompt_mgr=prompt_mgr,
+        data_manager=data_manager,
+        eval_data_manager=eval_data_manager,
     )
 
     logger.info("Initializing eval generator...")
@@ -57,16 +68,19 @@ async def lifespan(app: FastAPI):
         prompt_mgr=prompt_mgr,
         data_manager=data_manager,
         eval_data_manager=eval_data_manager,
+        generate_open_intent=settings.GENERATE_OPEN_INTENT_EVAL,
     )
 
     trainer_service =  services.TrainerService(
-        base_model="prajjwal1/bert-tiny"
+        base_model="prajjwal1/bert-tiny",
+        label_config=label_config
     )
 
     logger.info("Initializing model analyzer...")
     model_analyzer = services.ModelAnalyzer(
         trainer_service=trainer_service,
-        data_manager=data_manager
+        data_manager=data_manager,
+        label_config=label_config
     )
 
     logger.info("Initializing error pattern analysis service...")
@@ -81,12 +95,14 @@ async def lifespan(app: FastAPI):
         trainer_service=trainer_service,
         model_analyzer=model_analyzer,
         data_manager=data_manager,
-        eval_data_manager=eval_data_manager
+        eval_data_manager=eval_data_manager,
+        label_config=label_config
     )
 
     app.state.data_manager = data_manager
     app.state.eval_data_manager = eval_data_manager
     app.state.data_generator = data_generator
+    app.state.data_generator_v2 = data_generator_v2
     app.state.eval_generator = eval_generator
     app.state.prompt_mgr = prompt_mgr
     app.state.trainer_service = trainer_service

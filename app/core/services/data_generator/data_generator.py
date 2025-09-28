@@ -12,17 +12,15 @@ import logging
 logger = logging.getLogger(__name__)
 
 class DataGenerator:
-    TOTAL_MESSAGE_PER_BATCH = 50
-    TOTAL_BATCH_PER_GEN = 25
-
+    TOTAL_MESSAGE_PER_BATCH = 30
+    TOTAL_BATCH_PER_GEN = 10
     SEED_PROMPT_KEY = "train/seed"
-    R = 20
 
-    def __init__(self, llm: BaseLLM, prompt_mgr: BasePromptManager, data_manager: DataManager, eval_data_manager: EvalDataManager = None):
+    def __init__(self, llm: BaseLLM, prompt_mgr: BasePromptManager, data_manager: DataManager, eval_data_manager: EvalDataManager):
         self.llm = llm
         self.prompt_mgr = prompt_mgr
         self.data_manager = data_manager
-        self.eval_data_manager = eval_data_manager or EvalDataManager()
+        self.eval_data_manager = eval_data_manager
         self.personas_ds = load_dataset("proj-persona/PersonaHub", "persona")
 
     async def fresh_gen(self, human_seeds: List[Sample]) -> List[Sample]:

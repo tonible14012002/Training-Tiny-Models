@@ -1,23 +1,42 @@
 from pydantic import BaseModel
-from typing import List, Literal, Optional, Dict, Any
-from enum import Enum
+from typing import List, Optional, Dict, Any, Union
 
 class Sample(BaseModel):
     msg: str
-    label: Literal[
-        "payment_intent",
-        "payment_request",
-        "smart_payment_system_command",
-        "open_intent"
-    ]
+    label: Union[str, int]  # Made flexible to support different label types
 
 class Result(BaseModel):
     messages: List[Sample]
 
-class PAYMENT_LABEL:
+class BaseLabelConfig:
+    @staticmethod
+    def name() -> str:
+        raise NotImplementedError
+
+    @staticmethod
+    def to_dict():
+        raise NotImplementedError
+
+    @staticmethod
+    def to_id2label():
+        raise NotImplementedError
+
+    @staticmethod
+    def from_str(label: str) -> int:
+        raise NotImplementedError
+
+    @staticmethod
+    def to_str(label: int) -> str:
+        raise NotImplementedError
+
+class PAYMENT_LABEL(BaseLabelConfig):
     PAYMENT_INTENT = 0
     PAYMENT_REQUEST = 1
     PAYMENT_COMMAND = 2
+
+    @staticmethod
+    def name() -> str:
+        return "Payment Classification v1"
 
     @staticmethod
     def to_dict():
@@ -45,7 +64,7 @@ class PAYMENT_LABEL:
             return PAYMENT_LABEL.PAYMENT_COMMAND
         else:
             raise ValueError(f"Unknown label: {label}")
-    
+
     @staticmethod
     def to_str(label: int) -> str:
         if label == PAYMENT_LABEL.PAYMENT_INTENT:
@@ -54,6 +73,53 @@ class PAYMENT_LABEL:
             return "payment_request"
         elif label == PAYMENT_LABEL.PAYMENT_COMMAND:
             return "smart_payment_system_command"
+        else:
+            raise ValueError(f"Unknown label: {label}")
+
+class PAYMENT_LABEL_V2(BaseLabelConfig):
+    PAYMENT_INTENT = 1
+    PAYMENT_REQUEST = 0
+    OPEN_INTENT = 2
+
+    @staticmethod
+    def name() -> str:
+        return "Payment Classification v2"
+
+    @staticmethod
+    def to_dict():
+        return {
+            "payment_intent": PAYMENT_LABEL_V2.PAYMENT_INTENT,
+            "payment_request": PAYMENT_LABEL_V2.PAYMENT_REQUEST,
+            "open_intent": PAYMENT_LABEL_V2.OPEN_INTENT,
+        }
+
+    @staticmethod
+    def to_id2label():
+        return {
+            PAYMENT_LABEL_V2.PAYMENT_INTENT: "payment_intent",
+            PAYMENT_LABEL_V2.PAYMENT_REQUEST: "payment_request",
+            PAYMENT_LABEL_V2.OPEN_INTENT: "open_intent",
+        }
+
+    @staticmethod
+    def from_str(label: str) -> int:
+        if label == "payment_intent":
+            return PAYMENT_LABEL_V2.PAYMENT_INTENT
+        elif label == "payment_request":
+            return PAYMENT_LABEL_V2.PAYMENT_REQUEST
+        elif label == "open_intent":
+            return PAYMENT_LABEL_V2.OPEN_INTENT
+        else:
+            raise ValueError(f"Unknown label: {label}")
+
+    @staticmethod
+    def to_str(label: int) -> str:
+        if label == PAYMENT_LABEL_V2.PAYMENT_INTENT:
+            return "payment_intent"
+        elif label == PAYMENT_LABEL_V2.PAYMENT_REQUEST:
+            return "payment_request"
+        elif label == PAYMENT_LABEL_V2.OPEN_INTENT:
+            return "open_intent"
         else:
             raise ValueError(f"Unknown label: {label}")
 

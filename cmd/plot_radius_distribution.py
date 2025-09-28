@@ -44,7 +44,7 @@ def calculate_distances_to_centers(model: ADBModelInference, dataset: Dataset):
     # Ensure ADB data is calculated
     if model.intent_centers is None or model.intent_radii is None:
         print("Calculating ADB centers and radii...")
-        model.calc_adb(dataset)
+        model.post_train(dataset)
 
     # Group data by labels
     label_distances = defaultdict(list)

@@ -37,6 +37,6 @@ Example action:
 - keywords_to_include: ["me", "my", "I need"]
 - sentence_patterns: ["Can you [action] me [amount]", "I need you to [action] [amount]"]
 - diversity_constraints: ["vary pronouns", "use different amounts", "include informal language"]
-- min_examples: 25
+- min_examples: 50
 
 Be specific with numbers, keywords, and patterns - avoid abstract recommendations.

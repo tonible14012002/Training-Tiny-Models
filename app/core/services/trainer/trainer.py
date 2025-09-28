@@ -1,5 +1,5 @@
-from app.core import schemas
 from app.core.mixins import NumericalFileAccessMixin
+from app.core.schemas.workflow import BaseLabelConfig
 from peft import LoraConfig, TaskType
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from transformers.training_args import TrainingArguments
@@ -10,24 +10,30 @@ import torch
 import logging
 import json
 import os
+import re
 from pathlib import Path
+from typing import Type
+import random
 
 logger = logging.getLogger(__name__)
 
 class TrainerService(NumericalFileAccessMixin):
-    CHECKPOINT_DIR = ".checkpoints"
-
-    @property
-    def base_directory(self) -> str:
-        return self.CHECKPOINT_DIR
-
     def __init__(
             self,
-            base_model: str
+            base_model: str,
+            label_config: Type[BaseLabelConfig]
         ):
         self.base_model = base_model
-        self.label2id = schemas.PAYMENT_LABEL.to_dict()
-        self.id2label = schemas.PAYMENT_LABEL.to_id2label()
+        self.label_config = label_config
+        self.label2id = label_config.to_dict()
+        self.id2label = label_config.to_id2label()
+
+        # Create label-specific checkpoint directory
+        label_name = self._sanitize_name(label_config.name())
+        self.CHECKPOINT_DIR = f'.checkpoints/{label_name}'
+
+        # Ensure directory exists
+        os.makedirs(self.CHECKPOINT_DIR, exist_ok=True)
 
         self.lora_config = LoraConfig(
             r=16,                    # Increased rank for better capacity (was 8)
@@ -52,15 +58,29 @@ class TrainerService(NumericalFileAccessMixin):
             logging_strategy="steps",
             output_dir=self.CHECKPOINT_DIR,
             # save_steps=100,
-            learning_rate=1e-5,
-            per_device_train_batch_size=8,     # Smaller batches
+            learning_rate=2e-5,
+            # per_device_train_batch_size=8,     # Smaller batches
             per_device_eval_batch_size=16,
             gradient_accumulation_steps=4,     # Effective batch size = 32
             num_train_epochs=3,                # More epochs
-            warmup_ratio=0.15,                 # More warmup
-            weight_decay=0.02,                 # Stronger regularization
+            # warmup_ratio=0.15,                 # More warmup
+            # weight_decay=0.02,                 # Stronger regularization
             report_to="none",
         )
+
+    def _sanitize_name(self, name: str) -> str:
+        """Sanitize label config name for use in file paths"""
+        # Convert to lowercase and replace spaces/special chars with underscores
+        sanitized = re.sub(r'[^a-zA-Z0-9_-]', '_', name.lower())
+        # Remove multiple consecutive underscores
+        sanitized = re.sub(r'_+', '_', sanitized)
+        # Remove leading/trailing underscores
+        return sanitized.strip('_')
+
+    @property
+    def base_directory(self) -> str:
+        return self.CHECKPOINT_DIR
+
     def setup(self):
         device = torch.accelerator.current_accelerator().type if hasattr(torch, "accelerator") else "cuda"
 
@@ -76,14 +96,16 @@ class TrainerService(NumericalFileAccessMixin):
             self.training_args
         ]
 
-    async def train(self, dataset: Dataset):
+    async def train(self, dataset: Dataset, inference_type: str = "adb"):
         # Save to next available checkpoint number
         checkpoint_num = self._get_next_number()
-        checkpoint_path = f"{TrainerService.CHECKPOINT_DIR}/{checkpoint_num}"
+        checkpoint_path = f"{self.CHECKPOINT_DIR}/{checkpoint_num}"
 
         self.training_args.output_dir = f"{checkpoint_path}/trainer_outputs"
 
         peft_model, _, tokenizer, training_args = self.setup()
+        seed = random.randint(0, 10000)
+        dataset.shuffle()
         tokenized_train_ds = dataset.map(self._get_preprocessor(tokenizer, "msg"), batched=True)
 
         trainer = Trainer(
@@ -100,10 +122,15 @@ class TrainerService(NumericalFileAccessMixin):
         logger.info(f"Training completed. Saving to checkpoint: {checkpoint_path}")
         trainer.save_model(checkpoint_path)
 
-        # Calculate and save ADB centers and radii using ADBModelInference
-        logger.info("Calculating ADB centers and radii...")
-        self._calc_and_save_adb(checkpoint_path, dataset)
-        logger.info(f"ADB data saved to {checkpoint_path}")
+        # Perform post-training calculations based on inference type
+        if inference_type == "adb":
+            logger.info("Calculating ADB centers and radii...")
+            self._post_train_adb(checkpoint_path, dataset)
+            logger.info(f"ADB data saved to {checkpoint_path}")
+        elif inference_type == "prob":
+            logger.info("Saving inference type for probability-based inference...")
+            self._post_train_prob(checkpoint_path)
+            logger.info(f"Probability-based inference config saved to {checkpoint_path}")
 
         return checkpoint_num
     
@@ -127,15 +154,15 @@ class TrainerService(NumericalFileAccessMixin):
         
         return process
 
-    def _calc_and_save_adb(self, checkpoint_path: str, dataset: Dataset):
+    def _post_train_adb(self, checkpoint_path: str, dataset: Dataset):
         """Calculate ADB centers and radii using ADBModelInference and save them"""
         from src.payment_classifier.inference.adb_inference import ADBModelInference
 
-        # Load the trained model using ADBModelInference
-        adb_inference = ADBModelInference(checkpoint_path)
+        # Load the trained model using ADBModelInference with label config
+        adb_inference = ADBModelInference(checkpoint_path, self.label_config)
 
         # Calculate ADB centers and radii
-        intent_centers, intent_radii = adb_inference.calc_adb(dataset)
+        intent_centers, intent_radii = adb_inference.post_train(dataset)
 
         # Save ADB data
         adb_data = {
@@ -147,4 +174,24 @@ class TrainerService(NumericalFileAccessMixin):
         with open(adb_file_path, 'w') as f:
             json.dump(adb_data, f, indent=2)
 
+        # Save inference type metadata
+        inference_config = {
+            "inference_type": "adb",
+            "created_at": str(Path(checkpoint_path).stat().st_mtime)
+        }
 
+        config_file_path = Path(checkpoint_path) / "inference_config.json"
+        with open(config_file_path, 'w') as f:
+            json.dump(inference_config, f, indent=2)
+
+    def _post_train_prob(self, checkpoint_path: str):
+        """Save inference type metadata for probability-based inference"""
+        # Save inference type metadata
+        inference_config = {
+            "inference_type": "prob",
+            "created_at": str(Path(checkpoint_path).stat().st_mtime)
+        }
+
+        config_file_path = Path(checkpoint_path) / "inference_config.json"
+        with open(config_file_path, 'w') as f:
+            json.dump(inference_config, f, indent=2)

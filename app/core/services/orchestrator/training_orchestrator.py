@@ -1,12 +1,13 @@
 import logging
 import time
-from typing import Dict, Optional
+from typing import Dict, Optional, Type
 
 from app.core.services.data_generator.data_generator import DataGenerator
 from app.core.services.trainer.trainer import TrainerService
 from app.core.services.model_analyzer.model_analyzer import ModelAnalyzer
 from app.core.services.data_manager.data_manager import DataManager
 from app.core.services.eval_data_manager.eval_data_manager import EvalDataManager
+from app.core.schemas.workflow import BaseLabelConfig
 from app.core.schemas.orchestrator import (
     IterationMetrics,
     PipelineConfig,
@@ -30,14 +31,15 @@ class TrainingOrchestrator:
         trainer_service: TrainerService,
         model_analyzer: ModelAnalyzer,
         data_manager: DataManager,
-        eval_data_manager: EvalDataManager
+        eval_data_manager: EvalDataManager,
+        label_config: Type[BaseLabelConfig]
     ):
         self.data_generator = data_generator
         self.trainer_service = trainer_service
         self.model_analyzer = model_analyzer
         self.data_manager = data_manager
         self.eval_data_manager = eval_data_manager
-
+        self.label_config = label_config
         self.status = PipelineStatus()
         self.logger = logging.getLogger(__name__)
 
@@ -82,13 +84,12 @@ class TrainingOrchestrator:
 
             # Convert to dataset format for model evaluation
             from datasets import Dataset
-            from app.core.schemas import PAYMENT_LABEL
 
             eval_data = []
             for sample in eval_samples:
                 eval_data.append({
                     "msg": sample.msg,
-                    "label": PAYMENT_LABEL.from_str(sample.label)
+                    "label": self.label_config.from_str(sample.label)
                 })
 
             eval_dataset = Dataset.from_list(eval_data)

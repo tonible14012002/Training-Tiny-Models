@@ -1,21 +1,38 @@
-from typing import List
+from typing import List, Type
 import json
 import logging
+import os
+import re
 from datasets import Dataset
-from app.core.schemas.workflow import Sample, PAYMENT_LABEL
+from app.core.schemas.workflow import Sample, BaseLabelConfig
 from app.core.mixins import NumericalFileAccessMixin, DeduplicationMixin
 
 logger = logging.getLogger(__name__)
 
 class EvalDataManager(NumericalFileAccessMixin, DeduplicationMixin):
-    BASE_LOCAL_EVAL_PATH = '.cache/eval/'
+    def __init__(self, label_config: Type[BaseLabelConfig], rouge_threshold: float = 0.6):
+        self._rouge_threshold = rouge_threshold
+        self.label_config = label_config
+
+        # Create label-specific eval path
+        label_name = self._sanitize_name(label_config.name())
+        self.BASE_LOCAL_EVAL_PATH = f'.cache/eval/{label_name}/'
+
+        # Ensure directory exists
+        os.makedirs(self.BASE_LOCAL_EVAL_PATH, exist_ok=True)
+
+    def _sanitize_name(self, name: str) -> str:
+        """Sanitize label config name for use in file paths"""
+        # Convert to lowercase and replace spaces/special chars with underscores
+        sanitized = re.sub(r'[^a-zA-Z0-9_-]', '_', name.lower())
+        # Remove multiple consecutive underscores
+        sanitized = re.sub(r'_+', '_', sanitized)
+        # Remove leading/trailing underscores
+        return sanitized.strip('_')
 
     @property
     def base_directory(self) -> str:
         return self.BASE_LOCAL_EVAL_PATH
-
-    def __init__(self, rouge_threshold: float = 0.6):
-        self._rouge_threshold = rouge_threshold
 
     @property
     def rouge_threshold(self) -> float:
@@ -50,7 +67,7 @@ class EvalDataManager(NumericalFileAccessMixin, DeduplicationMixin):
             for sample in data:
                 eval_sample = {
                     "msg": sample.msg,
-                    "label": PAYMENT_LABEL.from_str(sample.label)
+                    "label": self.label_config.from_str(sample.label)
                 }
                 f.write(json.dumps(eval_sample) + '\n')
 
@@ -86,7 +103,7 @@ class EvalDataManager(NumericalFileAccessMixin, DeduplicationMixin):
                 # Convert integer label back to string for Sample object
                 sample_data = {
                     "msg": data["msg"],
-                    "label": PAYMENT_LABEL.to_str(data["label"])
+                    "label": self.label_config.to_str(data["label"])
                 }
                 samples.append(Sample(**sample_data))
 
@@ -287,7 +304,7 @@ class EvalDataManager(NumericalFileAccessMixin, DeduplicationMixin):
         samples = self.load(iteration_number)
         transformed = [{
             "msg": sample.msg,
-            "label": PAYMENT_LABEL.from_str(sample.label)
+            "label": self.label_config.from_str(sample.label)
         } for sample in samples]
 
         if not samples:

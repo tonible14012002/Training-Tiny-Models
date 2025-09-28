@@ -1,9 +1,9 @@
 from transformers import AutoTokenizer
 from peft import AutoPeftModelForSequenceClassification
-from app.core.schemas import PAYMENT_LABEL
+from app.core.schemas.workflow import BaseLabelConfig
 from datasets import Dataset
 import torch
-from typing import List
+from typing import List, Type
 from collections import defaultdict
 import json
 from pathlib import Path
@@ -12,9 +12,11 @@ class ADBModelInference:
     def __init__(
         self,
         peft_path: str,
+        label_config: Type[BaseLabelConfig]
     ):
         self.peft_path = peft_path
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.label_config = label_config
         self._setup(peft_path)
         self._load_adb_data(peft_path)
 
@@ -28,9 +30,9 @@ class ADBModelInference:
         self.peft_path = peft_path
         self.tokenizer = tokenizer or AutoTokenizer.from_pretrained(peft_path)
 
-        # Use centralized label configuration
-        self.label2id = PAYMENT_LABEL.to_dict()
-        self.id2label = PAYMENT_LABEL.to_id2label()
+        # Use injected label configuration
+        self.label2id = self.label_config.to_dict()
+        self.id2label = self.label_config.to_id2label()
 
         self.peft_model = AutoPeftModelForSequenceClassification.from_pretrained(
             peft_path,
@@ -62,39 +64,16 @@ class ADBModelInference:
             self.intent_centers = None
             self.intent_radii = None
 
-    def check_adb(self):
+    def _check_adb(self):
         """Check if ADB data is available, raise assertion error if not"""
         adb_file_path = Path(self.peft_path) / "adb_data.json"
         assert adb_file_path.exists(), (
             f"ADB data not found at {adb_file_path}. "
             "Please run training first to calculate ADB centers and radii, "
-            "or manually call calc_adb() and save the data."
+            "or manually call post_train() and save the data."
         )
 
-    def predict(self, texts: list[str], return_cls_emb: bool) -> list[int]:
-        inputs = self.tokenizer(
-            texts,
-            return_tensors="pt",
-            padding=True,
-            truncation=True,
-            max_length=128,
-        )
-        outputs = self.peft_model(**inputs, output_hidden_states=True)
-        predictions = outputs.logits.argmax(dim=-1).tolist()
-
-        # Convert logits indices to actual label IDs
-        sorted_ids = sorted(self.label2id.values())  # [1, 2, 3]
-        predicted_label_ids = [sorted_ids[idx] for idx in predictions]
-
-        # Then get the string labels
-        predicted_labels = [self.id2label[label_id] for label_id in predicted_label_ids]
-
-        if return_cls_emb:
-            return predicted_labels, outputs, outputs.hidden_states[-1][:, 0, :]  # CLS token
-
-        return predicted_labels, outputs
-
-    def calc_adb(self, data: Dataset):
+    def post_train(self, data: Dataset):
         confidence_ratio = 0.9  # For radius calculation
         batch_size = 32
         # Get the embedding dimension from the model
@@ -154,8 +133,8 @@ class ADBModelInference:
 
         return intent_centers_serializable, intent_radii
     
-    def predict_with_adb(self, texts: List[str]) -> List[str]:
-        self.check_adb()
+    def predict(self, texts: List[str]) -> List[str]:
+        self._check_adb()
         assert self.intent_centers is not None and self.intent_radii is not None, (
             "ADB parameters not loaded. Please ensure ADB data was properly calculated and saved."
         )
@@ -170,7 +149,6 @@ class ADBModelInference:
 
         with torch.no_grad():
             outputs = self.peft_model(**inputs, output_hidden_states=True)
-            print(outputs)
             cls_embeddings = outputs.hidden_states[-1][:, 0, :]  # CLS token
             probs = outputs.logits.softmax(dim=-1)
 
@@ -211,165 +189,7 @@ class ADBModelInference:
 
         return predictions
 
-    def evaluate_with_adb(self, data: Dataset) -> dict:
-        """
-        Evaluate model performance using ADB on a dataset with ground truth labels.
-
-        IMPORTANT: This method evaluates on KNOWN intents only. All samples in the dataset
-        are expected to be valid known intents, so they should NOT be predicted as "Unknown".
-        The "Unknown" prediction is treated as a classification error (false negative for
-        the true label, false positive for Unknown class).
-
-        For testing Unknown/OOD detection capability, use _analyze_open_intents() instead.
-        """
-        self.check_adb()
-        assert self.intent_centers is not None and self.intent_radii is not None, (
-            "ADB parameters not loaded. Please ensure ADB data was properly calculated and saved."
-        )
-
-        batch_size = 32
-        all_predictions = []
-        all_true_labels = []
-
-        # Process in batches
-        for i in range(0, len(data), batch_size):
-            batch = data[i:i+batch_size]
-            texts = batch['msg']
-            true_labels = batch['label']
-
-            # Get predictions for this batch
-            predictions = self.predict_with_adb(texts)
-
-            all_predictions.extend(predictions)
-            all_true_labels.extend(true_labels)
-
-        # Calculate metrics using proper binary classification for each label
-        total_samples = len(all_predictions)
-        correct = 0
-        unknown_predictions = 0
-
-        # Initialize counters for all labels including "Unknown"
-        all_labels = set(self.id2label.values()) | {"Unknown"}
-
-        # For each label, treat as binary classification: this_label vs not_this_label
-        true_positives = defaultdict(int)
-        false_positives = defaultdict(int)
-        true_negatives = defaultdict(int)
-        false_negatives = defaultdict(int)
-
-
-        for pred, true_label in zip(all_predictions, all_true_labels):
-            true_label_str = self.id2label[true_label]
-            pred_label = pred["label"]
-
-            if pred_label == "Unknown":
-                unknown_predictions += 1
-
-            # Overall accuracy: exact match
-            if pred_label == true_label_str:
-                correct += 1
-
-
-            # For each possible label, calculate binary classification metrics
-            for label in all_labels:
-                # True label is this label: positive class
-                # True label is not this label: negative class
-                true_is_label = (true_label_str == label)
-                pred_is_label = (pred_label == label)
-
-                if true_is_label and pred_is_label:
-                    true_positives[label] += 1  # Correctly predicted as this label
-                elif not true_is_label and pred_is_label:
-                    false_positives[label] += 1  # Incorrectly predicted as this label
-                elif true_is_label and not pred_is_label:
-                    false_negatives[label] += 1  # Should be this label but predicted as something else
-                else:  # not true_is_label and not pred_is_label
-                    true_negatives[label] += 1  # Correctly predicted as NOT this label
-
-        # Calculate overall metrics
-        accuracy = correct / total_samples if total_samples > 0 else 0.0
-        unknown_rate = unknown_predictions / total_samples if total_samples > 0 else 0.0
-
-        # Calculate per-label metrics
-        per_label_metrics = {}
-
-        macro_precision_sum = 0
-        macro_recall_sum = 0
-        macro_f1_sum = 0
-        macro_accuracy_sum = 0
-        valid_labels = 0
-
-        for label in all_labels:
-            tp = true_positives[label]
-            fp = false_positives[label]
-            tn = true_negatives[label]
-            fn = false_negatives[label]
-
-            # Every label should be evaluated on the ENTIRE evaluation set
-            # So tp + fp + tn + fn should always equal total_samples
-            assert tp + fp + tn + fn == total_samples, f"Binary classification counts don't add up for label {label}: {tp + fp + tn + fn} != {total_samples}"
-
-            # Calculate standard binary classification metrics
-            precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-            recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-            f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
-            label_accuracy = (tp + tn) / total_samples
-
-            # Count actual samples of this label in the dataset (positive class)
-            actual_samples = tp + fn  # True positives + false negatives = all actual instances
-
-
-            per_label_metrics[label] = {
-                "accuracy": label_accuracy,
-                "precision": precision,
-                "recall": recall,
-                "f1_score": f1,
-                "samples": actual_samples,
-                "true_positives": tp,
-                "false_positives": fp,
-                "true_negatives": tn,
-                "false_negatives": fn
-            }
-
-            # Only include labels that actually exist in the dataset for macro averages
-            # (i.e., labels that have at least one true positive or false negative)
-            if actual_samples > 0:
-                macro_precision_sum += precision
-                macro_recall_sum += recall
-                macro_f1_sum += f1
-                macro_accuracy_sum += label_accuracy
-                valid_labels += 1
-
-        # Calculate macro averages
-        macro_precision = macro_precision_sum / valid_labels if valid_labels > 0 else 0.0
-        macro_recall = macro_recall_sum / valid_labels if valid_labels > 0 else 0.0
-        macro_f1 = macro_f1_sum / valid_labels if valid_labels > 0 else 0.0
-        # macro_accuracy = macro_accuracy_sum / valid_labels if valid_labels > 0 else 0.0
-
-        # Validate known intent true negative requirement:
-        # All samples in evaluation dataset are known intents, so they should NOT be predicted as "Unknown"
-        known_intent_true_negative_rate = (total_samples - unknown_predictions) / total_samples if total_samples > 0 else 0.0
-
-        return {
-            "overall": {
-                "accuracy": accuracy,
-                "unknown_rate": unknown_rate,
-                "macro_precision": macro_precision,
-                "macro_recall": macro_recall,
-                "macro_f1": macro_f1,
-                "total_samples": total_samples,
-                "correct_predictions": correct,
-                "unknown_predictions": unknown_predictions,
-                "known_intent_true_negative_rate": known_intent_true_negative_rate
-            },
-            "per_label": per_label_metrics,
-            "adb_info": {
-                "radii": self.intent_radii,
-                "labels": self.id2label
-            }
-        }
-
-    def evaluate_with_unknown_intents(self, known_intent_data: Dataset, unknown_intent_texts: List[str]) -> dict:
+    def evaluate(self, known_intent_data: Dataset, unknown_intent_texts: List[str]) -> dict:
         """
         Comprehensive evaluation that treats "Unknown" as a proper label to be tested on both:
         1. Known intents (should NOT be predicted as Unknown - true negatives)
@@ -382,7 +202,7 @@ class ADBModelInference:
         Returns:
             dict: Comprehensive metrics including Unknown label performance
         """
-        self.check_adb()
+        self._check_adb()
         assert self.intent_centers is not None and self.intent_radii is not None, (
             "ADB parameters not loaded. Please ensure ADB data was properly calculated and saved."
         )
@@ -397,7 +217,7 @@ class ADBModelInference:
             texts = batch['msg']
             true_labels = batch['label']
 
-            predictions = self.predict_with_adb(texts)
+            predictions = self.predict(texts)
             known_predictions.extend(predictions)
             known_true_labels.extend(true_labels)
 
@@ -407,7 +227,7 @@ class ADBModelInference:
 
         for i in range(0, len(unknown_intent_texts), batch_size):
             batch_texts = unknown_intent_texts[i:i+batch_size]
-            predictions = self.predict_with_adb(batch_texts)
+            predictions = self.predict(batch_texts)
             unknown_predictions.extend(predictions)
 
         # Combine all predictions and true labels

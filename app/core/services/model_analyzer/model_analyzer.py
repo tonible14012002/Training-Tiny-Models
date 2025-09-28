@@ -1,9 +1,12 @@
 import logging
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Type, Union
 from datasets import Dataset
+from pathlib import Path
+import json
 
 from app.core.services.trainer.trainer import TrainerService
 from app.core.services.data_manager.data_manager import DataManager
+from app.core.schemas.workflow import Sample, BaseLabelConfig
 from app.core.schemas.analysis import (
     EvaluationResult,
     OverallMetrics,
@@ -16,36 +19,72 @@ from app.core.schemas.analysis import (
     ErrorCase,
     ErrorsByLabel
 )
-from app.core.schemas.workflow import Sample
 from src.payment_classifier.inference.adb_inference import ADBModelInference
+from src.payment_classifier.inference.prob_inference import ProbModelInference
+from src.payment_classifier.inference.base import BaseInferencer
 
 logger = logging.getLogger(__name__)
 
 class ModelAnalyzer:
     '''
-    Analyze and provide insights on machine learning models using ADB inference.
+    Analyze and provide insights on machine learning models using various inference methods.
     '''
 
-    def __init__(self, trainer_service: TrainerService, data_manager: DataManager):
+    def __init__(self, trainer_service: TrainerService, data_manager: DataManager, label_config: Type[BaseLabelConfig]):
         self.trainer_service = trainer_service
         self.data_manager = data_manager
-        self.adb_inferencer: Optional[ADBModelInference] = None
+        self.label_config = label_config
+        self.inferencer: Optional[BaseInferencer] = None
 
-    def load_model(self, checkpoint_path: str) -> None:
-        """Load the ADB model from checkpoint path"""
+    def set_inferencer(self, inferencer: BaseInferencer) -> None:
+        """Set the inferencer to use for model analysis"""
+        self.inferencer = inferencer
+
+    def load_model(self, checkpoint_path: str, inferencer: Optional[BaseInferencer] = None) -> None:
+        """Load the model from checkpoint path with provided inferencer or detect inference type"""
         try:
-            self.adb_inferencer = ADBModelInference(peft_path=checkpoint_path)
-            logger.info(f"Loaded ADB model from {checkpoint_path}")
+            if inferencer is not None:
+                self.inferencer = inferencer
+                logger.info(f"Using provided inferencer for {checkpoint_path}")
+            else:
+                # Fallback to old detection logic for backward compatibility
+                inference_type = self._detect_inference_type(checkpoint_path)
+
+                if inference_type == "prob":
+                    self.inferencer = ProbModelInference(peft_path=checkpoint_path, label_config=self.label_config)
+                    logger.info(f"Loaded probability-based model from {checkpoint_path}")
+                else:
+                    self.inferencer = ADBModelInference(peft_path=checkpoint_path, label_config=self.label_config)
+                    logger.info(f"Loaded ADB model from {checkpoint_path}")
         except Exception as e:
             logger.error(f"Failed to load model from {checkpoint_path}: {e}")
             raise
+
+    def _detect_inference_type(self, checkpoint_path: str) -> str:
+        """Detect inference type from checkpoint metadata, fallback to ADB if not found"""
+        config_file = Path(checkpoint_path) / "inference_config.json"
+
+        if config_file.exists():
+            try:
+                with open(config_file, 'r') as f:
+                    config = json.load(f)
+                return config.get("inference_type", "adb")
+            except (json.JSONDecodeError, KeyError):
+                logger.warning(f"Could not read inference config from {config_file}, defaulting to ADB")
+
+        # Fallback: check if ADB data exists
+        adb_file = Path(checkpoint_path) / "adb_data.json"
+        if adb_file.exists():
+            return "adb"
+
+        # Default to probability-based for backward compatibility
+        return "prob"
 
     def analyze_model(
         self,
         evaluation_dataset: Dataset,
         open_intent_samples: Optional[List[str]] = None,
         include_test_cases: bool = False,
-        use_comprehensive_unknown_evaluation: bool = True
     ) -> EvaluationResult:
         """
         Comprehensive analysis of the trained model using ADB inference.
@@ -54,38 +93,27 @@ class ModelAnalyzer:
             evaluation_dataset: Dataset with 'msg' and 'label' columns
             open_intent_samples: List of open intent samples to test OOD detection
             include_test_cases: Whether to include individual test case results
-            use_comprehensive_unknown_evaluation: If True and open_intent_samples provided,
-                                                   use comprehensive evaluation that treats Unknown
-                                                   as a proper label tested on both datasets
-
         Returns:
             EvaluationResult with comprehensive metrics
         """
-        if self.adb_inferencer is None:
+        if self.inferencer is None:
             raise ValueError("Model not loaded. Call load_model() first.")
 
         logger.info(f"Analyzing model on {len(evaluation_dataset)} evaluation samples")
-
-        # Choose evaluation method based on parameters
-        if open_intent_samples and use_comprehensive_unknown_evaluation:
-            # Use comprehensive evaluation that treats Unknown as a proper label
-            logger.info(f"Using comprehensive Unknown evaluation with {len(open_intent_samples)} unknown samples")
-            adb_results = self.adb_inferencer.evaluate_with_unknown_intents(evaluation_dataset, open_intent_samples)
-        else:
-            # Use traditional evaluation on known intents only
-            adb_results = self.adb_inferencer.evaluate_with_adb(evaluation_dataset)
+        logger.info(f"Using {len(open_intent_samples)} unknown intent samples")
+        eval_results = self.inferencer.evaluate(evaluation_dataset, open_intent_samples)
 
         # Convert to our schema format
-        overall_metrics = OverallMetrics(**adb_results["overall"])
+        overall_metrics = OverallMetrics(**eval_results["overall"])
 
         per_label_metrics = {}
-        for label, metrics in adb_results["per_label"].items():
+        for label, metrics in eval_results["per_label"].items():
             per_label_metrics[label] = LabelMetrics(**metrics)
 
         # Create test cases if requested
         test_cases = None
         if include_test_cases:
-            test_cases = self._create_test_cases(evaluation_dataset, adb_results)
+            test_cases = self._create_test_cases(evaluation_dataset, eval_results)
 
         # Group errors by label for convenience (including unknown misclassified samples)
         errors_by_label = self._group_errors_by_label(
@@ -95,50 +123,37 @@ class ModelAnalyzer:
 
         # Analyze open intent samples if provided (only if not using comprehensive evaluation)
         open_intent_analysis = None
-        if open_intent_samples and not use_comprehensive_unknown_evaluation:
-            open_intent_results = self._analyze_open_intents(open_intent_samples)
-            logger.info(f"Open intent analysis: {len(open_intent_samples)} samples, "
-                       f"{open_intent_results['detected_as_unknown']} detected as unknown "
-                       f"({open_intent_results['unknown_rate']:.2%})")
-
-            # Convert to schema format
-            try:
-                misclassified = [
-                    MisclassifiedOpenIntent(**item) for item in open_intent_results["misclassified"]
-                ]
-                logger.info(f"Successfully converted {len(misclassified)} misclassified items to schema format")
-            except Exception as e:
-                logger.error(f"Error converting misclassified items to schema format: {e}")
-                logger.error(f"Raw misclassified data: {open_intent_results['misclassified']}")
-                misclassified = []  # Fallback to empty list
-
-            open_intent_analysis = OpenIntentAnalysis(
-                total_samples=open_intent_results["total_samples"],
-                detected_as_unknown=open_intent_results["detected_as_unknown"],
-                unknown_rate=open_intent_results["unknown_rate"],
-                false_positive_rate=open_intent_results["false_positive_rate"],
-                misclassified=misclassified
-            )
-        elif open_intent_samples and use_comprehensive_unknown_evaluation:
+        if open_intent_samples:
             # Extract open intent analysis from comprehensive results
-            if "unknown_analysis" in adb_results:
-                unknown_analysis = adb_results["unknown_analysis"]
-                # Create minimal open intent analysis from comprehensive results
-                open_intent_analysis = OpenIntentAnalysis(
-                    total_samples=len(open_intent_samples),
-                    detected_as_unknown=unknown_analysis["true_positives"],
-                    unknown_rate=unknown_analysis["unknown_detection_rate"],
-                    false_positive_rate=unknown_analysis["false_positive_rate"],
-                    misclassified=[]  # Could be enhanced to extract from comprehensive results if needed
-                )
+            if "unknown_analysis" in eval_results:
+                unknown_analysis = eval_results["unknown_analysis"]
+                # Handle different inference types - ADB has detailed unknown analysis, prob-based has simplified
+                if isinstance(unknown_analysis, dict) and "true_positives" in unknown_analysis:
+                    # ADB inference with detailed unknown analysis
+                    open_intent_analysis = OpenIntentAnalysis(
+                        total_samples=len(open_intent_samples),
+                        detected_as_unknown=unknown_analysis["true_positives"],
+                        unknown_rate=unknown_analysis["unknown_detection_rate"],
+                        false_positive_rate=unknown_analysis["false_positive_rate"],
+                        misclassified=[]  # Could be enhanced to extract from comprehensive results if needed
+                    )
+                elif isinstance(unknown_analysis, dict) and "note" in unknown_analysis:
+                    # Probability-based inference - no real unknown detection
+                    open_intent_analysis = OpenIntentAnalysis(
+                        total_samples=len(open_intent_samples),
+                        detected_as_unknown=0,  # Prob-based can't detect unknowns
+                        unknown_rate=0.0,
+                        false_positive_rate=1.0,  # All unknowns are misclassified in prob-based
+                        misclassified=[]
+                    )
 
         # Pass through unknown_analysis if using comprehensive evaluation
-        unknown_analysis = adb_results.get("unknown_analysis") if use_comprehensive_unknown_evaluation and open_intent_samples else None
+        unknown_analysis = eval_results.get("unknown_analysis") 
 
         result = EvaluationResult(
             overall=overall_metrics,
             per_label=per_label_metrics,
-            adb_info=adb_results.get("adb_info"),
+            adb_info=eval_results.get("adb_info"),
             test_cases=test_cases,
             open_intent_analysis=open_intent_analysis,
             unknown_analysis=unknown_analysis,
@@ -147,7 +162,7 @@ class ModelAnalyzer:
 
         return result
 
-    def _create_test_cases(self, evaluation_dataset: Dataset, adb_results: dict) -> List[TestCase]:
+    def _create_test_cases(self, evaluation_dataset: Dataset, eval_results: dict) -> List[TestCase]:
         """Create test cases from evaluation results"""
         test_cases = []
 
@@ -158,14 +173,14 @@ class ModelAnalyzer:
         for i in range(0, len(evaluation_dataset), batch_size):
             batch = evaluation_dataset[i:i+batch_size]
             texts = batch['msg']
-            predictions = self.adb_inferencer.predict_with_adb(texts)
+            predictions = self.inferencer.predict(texts)
             all_predictions.extend(predictions)
 
         # Create test case objects
         for i, (sample_data, pred_data) in enumerate(zip(evaluation_dataset, all_predictions)):
             sample = Sample(
                 msg=sample_data['msg'],
-                label=self.adb_inferencer.id2label[sample_data['label']]
+                label=self.inferencer.id2label[sample_data['label']]
             )
 
             prediction = Prediction(
@@ -177,7 +192,7 @@ class ModelAnalyzer:
 
             test_case = TestCase(
                 input=sample,
-                true_label=self.adb_inferencer.id2label[sample_data['label']],
+                true_label=self.inferencer.id2label[sample_data['label']],
                 prediction=prediction
             )
             test_cases.append(test_case)
@@ -190,13 +205,13 @@ class ModelAnalyzer:
         open_intent_samples: Optional[List[str]] = None
     ) -> Dict[str, ErrorsByLabel]:
         """Group false positives and false negatives by label, including unknown misclassified samples"""
-        if self.adb_inferencer is None:
+        if self.inferencer is None:
             raise ValueError("Model not loaded")
 
         # Get all labels in the dataset
         all_labels = set()
         for sample in evaluation_dataset:
-            true_label = self.adb_inferencer.id2label[sample['label']]
+            true_label = self.inferencer.id2label[sample['label']]
             all_labels.add(true_label)
 
         # Initialize error groups for each label
@@ -205,7 +220,7 @@ class ModelAnalyzer:
             errors_by_label[label] = ErrorsByLabel(false_positives=[], false_negatives=[])
 
         # Always include "Unknown" if it exists in the model
-        if "Unknown" in self.adb_inferencer.label2id:
+        if "Unknown" in self.inferencer.label2id:
             errors_by_label["Unknown"] = ErrorsByLabel(false_positives=[], false_negatives=[])
 
         # Process evaluation dataset (known intents)
@@ -215,12 +230,12 @@ class ModelAnalyzer:
         for i in range(0, len(evaluation_dataset), batch_size):
             batch = evaluation_dataset[i:i+batch_size]
             texts = batch['msg']
-            predictions = self.adb_inferencer.predict_with_adb(texts)
+            predictions = self.inferencer.predict(texts)
             all_predictions.extend(predictions)
 
         # Group errors from evaluation dataset
         for i, (sample_data, pred_data) in enumerate(zip(evaluation_dataset, all_predictions)):
-            true_label = self.adb_inferencer.id2label[sample_data['label']]
+            true_label = self.inferencer.id2label[sample_data['label']]
             predicted_label = pred_data["label"]
 
             # Skip correct predictions
@@ -249,7 +264,7 @@ class ModelAnalyzer:
 
         # Process open intent samples if provided
         if open_intent_samples and "Unknown" in errors_by_label:
-            open_predictions = self.adb_inferencer.predict_with_adb(open_intent_samples)
+            open_predictions = self.inferencer.predict(open_intent_samples)
 
             for i, pred_data in enumerate(open_predictions):
                 predicted_label = pred_data["label"]
@@ -294,7 +309,7 @@ class ModelAnalyzer:
         Returns:
             Dict where keys are "expected_label->predicted_label" and values are lists of ErrorCase
         """
-        if self.adb_inferencer is None:
+        if self.inferencer is None:
             raise ValueError("Model not loaded")
 
         # Dictionary to group errors by (expected, predicted) tuple
@@ -307,12 +322,12 @@ class ModelAnalyzer:
         for i in range(0, len(evaluation_dataset), batch_size):
             batch = evaluation_dataset[i:i+batch_size]
             texts = batch['msg']
-            predictions = self.adb_inferencer.predict_with_adb(texts)
+            predictions = self.inferencer.predict(texts)
             all_predictions.extend(predictions)
 
         # Group errors from evaluation dataset
         for i, (sample_data, pred_data) in enumerate(zip(evaluation_dataset, all_predictions)):
-            true_label = self.adb_inferencer.id2label[sample_data['label']]
+            true_label = self.inferencer.id2label[sample_data['label']]
             predicted_label = pred_data["label"]
 
             # Skip correct predictions
@@ -340,7 +355,7 @@ class ModelAnalyzer:
 
         # Process open intent samples if provided
         if open_intent_samples:
-            open_predictions = self.adb_inferencer.predict_with_adb(open_intent_samples)
+            open_predictions = self.inferencer.predict(open_intent_samples)
 
             for i, pred_data in enumerate(open_predictions):
                 predicted_label = pred_data["label"]
@@ -395,10 +410,10 @@ class ModelAnalyzer:
 
     def _analyze_open_intents(self, open_intent_samples: List[str]) -> Dict:
         """Analyze open intent detection capability"""
-        if self.adb_inferencer is None:
+        if self.inferencer is None:
             raise ValueError("Model not loaded")
 
-        predictions = self.adb_inferencer.predict_with_adb(open_intent_samples)
+        predictions = self.inferencer.predict(open_intent_samples)
 
         detected_as_unknown = sum(1 for pred in predictions if pred["label"] == "Unknown")
         total_samples = len(open_intent_samples)

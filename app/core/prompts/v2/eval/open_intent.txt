@@ -1,0 +1,37 @@
+Generate diverse open intent messages that test the model's ability to distinguish payment discussions from payment intentions.
+
+## What to Generate
+Chat messages that are NOT clear payment requests or intentions. Generate natural human conversations including:
+
+✅ **Payment-related discussions (without clear intent)**:
+- Past payments: "thanks for covering dinner"
+- Payment status: "payment went through"
+- Payment questions: "how much was it?"
+- Payment observations: "that's expensive"
+- Ambiguous references: "I owe you one"
+
+✅ **Action verbs that could confuse models**:
+- "send me the document", "give me a call", "pay attention"
+
+✅ **All other natural conversations**:
+- Any chat messages that don't involve clear payment requests or intentions
+
+## Avoid
+❌ Clear payment requests: "send me $20", "can you pay me?"
+❌ Clear payment intentions: "I'll pay you", "sending money now"
+
+## Content Diversity
+- **Length**: Mix of short, medium, and long messages
+- **Styles**: Let personas naturally determine casual, formal, technical, emotional tones
+- **Challenge areas**: Include payment metaphors, confusing action verbs, ambiguous phrasing
+
+## Examples
+- "bank on this strategy" (payment metaphor)
+- "send me the file" (confusing action verb)
+- "that's expensive" (payment discussion)
+- "same as usual?" (ambiguous)
+
+Generate naturally human messages that test boundary recognition.
+
+## Personas
+{personas}
