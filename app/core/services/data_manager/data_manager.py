@@ -1,4 +1,4 @@
-from typing import List, Optional, Type
+from typing import List, Type
 from datasets import Dataset
 from app.core.schemas import Sample
 from app.core.schemas.workflow import BaseLabelConfig
@@ -39,6 +39,17 @@ class DataManager(DeduplicationMixin):
 
     def save(self, data: List[Sample]):
         self._save(data, path=self.LOCAL_FILE)
+
+    def save_to_versioned_file(self, data: List[Sample], file_suffix: str):
+        """Save data to a versioned file with a custom suffix.
+
+        Args:
+            data: List of samples to save
+            file_suffix: Suffix to append to the file name (e.g., 'fix_gen_1')
+        """
+        versioned_file = f'{self.cache_dir}/.data_{file_suffix}.jsonl'
+        self._save(data, path=versioned_file)
+        return versioned_file
 
     def _save(self, data: List[Sample], path: str = None):
         # open File and append data

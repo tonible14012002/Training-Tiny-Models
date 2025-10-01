@@ -25,17 +25,17 @@ def _detect_inference_type(checkpoint_path: str) -> str:
         try:
             with open(config_file, 'r') as f:
                 config = json.load(f)
-            return config.get("inference_type", "adb")
+            return config.get("inference_type", "prob")
         except (json.JSONDecodeError, KeyError):
-            logger.warning(f"Could not read inference config from {config_file}, defaulting to ADB")
+            logger.warning(f"Could not read inference config from {config_file}, defaulting to prob")
 
     # Fallback: check if ADB data exists
     adb_file = Path(checkpoint_path) / "adb_data.json"
     if adb_file.exists():
         return "adb"
 
-    # Default to ADB for backward compatibility
-    return "adb"
+    # Default to prob for backward compatibility
+    return "prob"
 
 @router.post("/generate-data-v2")
 async def generate_synthetic_data_v2(request: Request):
@@ -91,7 +91,7 @@ async def generate_fresh_eval_data(request: Request):
     }
 
 @router.post("/train")
-async def train_student_model(request: Request, inference_type: str = "adb"):
+async def train_student_model(request: Request, inference_type: str = "prob"):
     """Train model with specified inference type (adb or prob)"""
     data_manager: services.DataManager = request.app.state.data_manager
     trainer_service: services.TrainerService = request.app.state.trainer_service
@@ -111,12 +111,71 @@ async def train_student_model(request: Request, inference_type: str = "adb"):
         "inference_type": inference_type
     }
 
+@router.post("/continual-train")
+async def continual_train_model(
+    request: Request,
+    checkpoint_num: int,
+    inference_type: str = "prob"
+):
+    """Continue training from an existing checkpoint with sub-versioning.
+
+    Args:
+        checkpoint_num: The base checkpoint number to continue from
+        inference_type: Type of inference ("adb" or "prob")
+
+    Returns:
+        Response with new sub-checkpoint identifier (e.g., "10.1")
+    """
+    data_manager: services.DataManager = request.app.state.data_manager
+    trainer_service: services.TrainerService = request.app.state.trainer_service
+
+    if inference_type not in ["adb", "prob"]:
+        return {
+            "status": "error",
+            "message": "inference_type must be 'adb' or 'prob'"
+        }
+
+    # Check if checkpoint exists
+    checkpoint_path = f"{trainer_service.CHECKPOINT_DIR}/{checkpoint_num}"
+    if not Path(checkpoint_path).exists():
+        return {
+            "status": "error",
+            "message": f"Checkpoint {checkpoint_num} does not exist"
+        }
+
+    try:
+        ds = data_manager.to_datasets()
+        checkpoint_id = await trainer_service.continual_train(
+            checkpoint_num=checkpoint_num,
+            dataset=ds,
+            inference_type=inference_type
+        )
+
+        return {
+            "status": "completed",
+            "checkpoint_id": checkpoint_id,
+            "base_checkpoint": checkpoint_num,
+            "inference_type": inference_type,
+            "message": f"Continual training completed. New checkpoint: {checkpoint_id}"
+        }
+    except Exception as e:
+        logger.error(f"Continual training failed: {str(e)}")
+        return {
+            "status": "error",
+            "message": f"Continual training failed: {str(e)}"
+        }
+
 @router.post("/evaluate")
 async def evaluate_model(
     request: Request,
     payload: schemas.EvaluationRequest = schemas.EvaluationRequest()
 ) -> schemas.EvaluationResponse:
-    """Evaluate model performance using the latest evaluation dataset with comprehensive analysis."""
+    """Evaluate model performance using the latest evaluation dataset with comprehensive analysis.
+
+    Args:
+        payload.checkpoint_id: Optional checkpoint identifier (e.g., "1", "2", "1.1", "2.3").
+                               If not provided, uses the latest checkpoint.
+    """
 
     # Get services from app state
     model_analyzer: services.ModelAnalyzer = request.app.state.model_analyzer
@@ -124,18 +183,33 @@ async def evaluate_model(
     eval_data_manager: services.EvalDataManager = request.app.state.eval_data_manager
 
     try:
-        # Get latest checkpoint
-        checkpoint_path = trainer_service.get_latest_item_path()
-        if checkpoint_path is None:
-            return schemas.EvaluationResponse(
-                message="No trained model checkpoint found",
-                status="error",
-                checkpoint_path="",
-                evaluation_data_info={},
-                results={}
-            )
-
-        logger.info(f"Using checkpoint: {checkpoint_path}")
+        # Get checkpoint path - use specific checkpoint if provided, otherwise latest
+        if payload.checkpoint_id:
+            checkpoint_path = trainer_service.get_item_path_by_id(payload.checkpoint_id)
+            if checkpoint_path is None:
+                return schemas.EvaluationResponse(
+                    message=f"Checkpoint {payload.checkpoint_id} not found",
+                    status="error",
+                    checkpoint_path="",
+                    checkpoint_id=payload.checkpoint_id,
+                    evaluation_data_info={},
+                    results={}
+                )
+            checkpoint_id = payload.checkpoint_id
+            logger.info(f"Using specified checkpoint: {checkpoint_path}")
+        else:
+            checkpoint_path = trainer_service.get_latest_item_path()
+            if checkpoint_path is None:
+                return schemas.EvaluationResponse(
+                    message="No trained model checkpoint found",
+                    status="error",
+                    checkpoint_path="",
+                    checkpoint_id=None,
+                    evaluation_data_info={},
+                    results={}
+                )
+            checkpoint_id = Path(checkpoint_path).name
+            logger.info(f"Using latest checkpoint: {checkpoint_path}")
 
         # Load evaluation dataset
         eval_samples = eval_data_manager.load(payload.iteration_number)
@@ -144,6 +218,7 @@ async def evaluate_model(
                 message="No evaluation data found",
                 status="error",
                 checkpoint_path=str(checkpoint_path),
+                checkpoint_id=checkpoint_id,
                 evaluation_data_info={},
                 results={}
             )
@@ -195,6 +270,7 @@ async def evaluate_model(
             message="Model evaluation completed successfully",
             status="completed",
             checkpoint_path=str(checkpoint_path),
+            checkpoint_id=checkpoint_id,
             evaluation_data_info=eval_info,
             results=results
         )
@@ -205,6 +281,7 @@ async def evaluate_model(
             message=f"Evaluation failed: {str(e)}",
             status="error",
             checkpoint_path=str(checkpoint_path) if 'checkpoint_path' in locals() else "",
+            checkpoint_id=checkpoint_id if 'checkpoint_id' in locals() else None,
             evaluation_data_info={},
             results={}
         )
@@ -250,11 +327,20 @@ async def inference_model(request: Request, payload: schemas.InferenceRequest):
     }
 
 @router.post("/analyze-error-patterns")
-async def analyze_error_patterns(request: Request):
+async def analyze_error_patterns(
+    request: Request,
+    payload: schemas.AnalyzeErrorPatternsRequest = schemas.AnalyzeErrorPatternsRequest()
+):
     """
-    Analyze error patterns from the latest evaluation results using LLM.
+    Analyze error patterns from evaluation results using LLM.
     This endpoint takes the errors_by_label output from model evaluation and
     uses LLM to identify patterns, root causes, and data-focused recommendations.
+
+    Args:
+        payload.checkpoint_id: Optional checkpoint identifier (e.g., "1", "2", "1.1", "2.3").
+                               If not provided, uses the latest checkpoint.
+        payload.iteration_number: Optional evaluation dataset iteration number.
+                                  If not provided, uses the latest evaluation dataset.
     """
     # Get services from app state
     model_analyzer: services.ModelAnalyzer = request.app.state.model_analyzer
@@ -263,30 +349,43 @@ async def analyze_error_patterns(request: Request):
     error_pattern_analyzer: services.ErrorPatternAnalysisService = request.app.state.error_pattern_analyzer
 
     try:
-        # Get latest checkpoint
-        checkpoint_path = trainer_service.get_latest_item_path()
-        if checkpoint_path is None:
-            return {
-                "message": "No trained model checkpoint found",
-                "status": "error",
-                "error_analyses": []
-            }
+        # Get checkpoint path - use specific checkpoint if provided, otherwise latest
+        if payload.checkpoint_id:
+            checkpoint_path = trainer_service.get_item_path_by_id(payload.checkpoint_id)
+            if checkpoint_path is None:
+                return {
+                    "message": f"Checkpoint {payload.checkpoint_id} not found",
+                    "status": "error",
+                    "error_analyses": []
+                }
+            logger.info(f"Using specified checkpoint: {checkpoint_path}")
+        else:
+            checkpoint_path = trainer_service.get_latest_item_path()
+            if checkpoint_path is None:
+                return {
+                    "message": "No trained model checkpoint found",
+                    "status": "error",
+                    "error_analyses": []
+                }
+            logger.info(f"Using latest checkpoint: {checkpoint_path}")
 
-        # Load model and get latest evaluation data
+        # Load model and evaluation data
         # For PAYMENT_LABEL_V2, always use probability-based inference
         prob_inferencer = ProbModelInference(peft_path=str(checkpoint_path), label_config=PAYMENT_LABEL_V2)
         model_analyzer.load_model(str(checkpoint_path), inferencer=prob_inferencer)
-        evaluation_dataset = eval_data_manager.to_datasets()  # Load latest evaluation data
+
+        # Use specified iteration number or latest
+        iteration_number = payload.iteration_number if payload.iteration_number is not None else eval_data_manager.get_latest_item_number()
+        evaluation_dataset = eval_data_manager.to_datasets(iteration_number)
 
         if evaluation_dataset is None:
             return {
-                "message": "No evaluation dataset found",
+                "message": f"No evaluation dataset found for iteration {iteration_number}",
                 "status": "error",
                 "error_analyses": []
             }
 
-        logger.info(f"Running model evaluation for error pattern analysis using checkpoint: {checkpoint_path}")
-        iteration_number = eval_data_manager.get_latest_item_number()
+        logger.info(f"Running model evaluation for error pattern analysis using checkpoint: {checkpoint_path}, iteration: {iteration_number}")
         open_intent_samples = eval_data_manager.load_open_intent(iteration_number)
 
         # Run evaluation to get errors_by_label
@@ -316,7 +415,9 @@ async def analyze_error_patterns(request: Request):
         return {
             "message": f"Error pattern analysis completed. Analyzed {len(error_analyses)} error patterns.",
             "status": "completed",
-            "checkpoint_path": checkpoint_path,
+            "checkpoint_path": str(checkpoint_path),
+            "checkpoint_id": payload.checkpoint_id if payload.checkpoint_id else Path(checkpoint_path).name,
+            "iteration_number": iteration_number,
             "error_analyses": [analysis.model_dump() for analysis in error_analyses],
             "evaluation_summary": {
                 "overall_accuracy": evaluation_result.overall.accuracy,
@@ -358,8 +459,15 @@ async def make_fix_prompt(request: Request, payload: schemas.BuildPromptRequest)
 
 @router.post("/generate-fix-data")
 async def generate_fix_data(request: Request, payload: schemas.FixGenRequest):
-    """Generate synthetic data using custom prompt for fixing model issues."""
+    """Generate synthetic data using custom prompt for fixing model issues.
+
+    The generated data is:
+    1. Deduplicated and filtered against existing data using ROUGE-L
+    2. Appended to the main data file
+    3. Saved to a separate timestamped file for tracking
+    """
     data_generator_v2: services.DataGeneratorV2 = request.app.state.data_generator_v2
+    data_manager: services.DataManager = request.app.state.data_manager
 
     try:
         # Load human seed data
@@ -376,16 +484,20 @@ async def generate_fix_data(request: Request, payload: schemas.FixGenRequest):
         human_seeds = TypeAdapter(List[schemas.Sample]).validate_python(converted)
 
         # Generate data using the fix_gen method with custom prompt
-        results = await data_generator_v2.fix_gen(
+        # Returns: (all_results, versioned_file_path, saved_count)
+        all_results, versioned_file_path, saved_count = await data_generator_v2.fix_gen(
             human_seeds=human_seeds,
             prompt=payload.prompt,
             amount=payload.amount
         )
 
         return {
-            "message": f"Fix data generation completed. Generated {len(results)} samples.",
+            "message": f"Fix data generation completed. Generated {len(all_results)} samples, {saved_count} saved after deduplication.",
             "status": "completed",
-            "samples_generated": len(results)
+            "samples_generated": len(all_results),
+            "samples_saved": saved_count,
+            "main_file": data_manager.LOCAL_FILE,
+            "versioned_file": versioned_file_path
         }
 
     except Exception as e:
@@ -393,5 +505,6 @@ async def generate_fix_data(request: Request, payload: schemas.FixGenRequest):
         return {
             "message": f"Fix data generation failed: {str(e)}",
             "status": "error",
-            "samples_generated": 0
+            "samples_generated": 0,
+            "samples_saved": 0
         }

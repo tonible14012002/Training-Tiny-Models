@@ -147,14 +147,20 @@ class EvaluationRequest(BaseModel):
     iteration_number: Optional[int] = None
     include_test_cases: bool = False
     include_open_intent: bool = True
+    checkpoint_id: Optional[str] = None  # e.g., "1", "2", "1.1", "2.3"
 
 class EvaluationResponse(BaseModel):
     message: str
     status: str
     checkpoint_path: str
+    checkpoint_id: Optional[str] = None  # e.g., "1", "2", "1.1", "2.3"
     evaluation_data_info: Dict[str, Any]
     results: Dict[str, Any]
 
 class FixGenRequest(BaseModel):
     prompt: str
     amount: Optional[int] = None
+
+class AnalyzeErrorPatternsRequest(BaseModel):
+    checkpoint_id: Optional[str] = None  # e.g., "1", "2", "1.1", "2.3"
+    iteration_number: Optional[int] = None

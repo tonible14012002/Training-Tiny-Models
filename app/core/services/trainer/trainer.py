@@ -96,7 +96,7 @@ class TrainerService(NumericalFileAccessMixin):
             self.training_args
         ]
 
-    async def train(self, dataset: Dataset, inference_type: str = "adb"):
+    async def train(self, dataset: Dataset, inference_type: str = "prob"):
         # Save to next available checkpoint number
         checkpoint_num = self._get_next_number()
         checkpoint_path = f"{self.CHECKPOINT_DIR}/{checkpoint_num}"
@@ -105,7 +105,7 @@ class TrainerService(NumericalFileAccessMixin):
 
         peft_model, _, tokenizer, training_args = self.setup()
         seed = random.randint(0, 10000)
-        dataset.shuffle()
+        dataset = dataset.shuffle(seed=seed)
         tokenized_train_ds = dataset.map(self._get_preprocessor(tokenizer, "msg"), batched=True)
 
         trainer = Trainer(
@@ -133,7 +133,79 @@ class TrainerService(NumericalFileAccessMixin):
             logger.info(f"Probability-based inference config saved to {checkpoint_path}")
 
         return checkpoint_num
-    
+
+    async def continual_train(
+        self,
+        checkpoint_num: int,
+        dataset: Dataset,
+        inference_type: str = "prob"
+    ) -> str:
+        """Continue training from an existing checkpoint with sub-versioning.
+
+        Args:
+            checkpoint_num: The base checkpoint number to continue from
+            dataset: The dataset to train on
+            inference_type: Type of inference ("adb" or "prob")
+
+        Returns:
+            The new sub-checkpoint identifier (e.g., "10.1")
+        """
+        # Determine paths using mixin method
+        load_from_path, save_to_path = self._get_next_sub_version_paths(checkpoint_num)
+
+        # Verify source checkpoint exists
+        if not Path(load_from_path).exists():
+            raise ValueError(f"Checkpoint {load_from_path} does not exist")
+
+        logger.info(f"Continuing training from checkpoint: {load_from_path}")
+        logger.info(f"Will save to: {save_to_path}")
+
+        # Set up training args with new output directory
+        self.training_args.output_dir = f"{save_to_path}/trainer_outputs"
+
+        # Load existing model (already has LoRA adapters merged)
+        device = torch.accelerator.current_accelerator().type if hasattr(torch, "accelerator") else "cuda"
+
+        model = AutoModelForSequenceClassification.from_pretrained(
+            load_from_path,
+            label2id=self.label2id,
+            id2label=self.id2label
+        ).to(device)
+
+        tokenizer = AutoTokenizer.from_pretrained(load_from_path)
+
+        # Prepare dataset
+        seed = random.randint(0, 10000)
+        dataset = dataset.shuffle(seed=seed)
+        tokenized_train_ds = dataset.map(self._get_preprocessor(tokenizer, "msg"), batched=True)
+
+        # Create trainer with loaded model
+        trainer = Trainer(
+            model=model,
+            args=self.training_args,
+            train_dataset=tokenized_train_ds,
+            tokenizer=tokenizer,
+        )
+
+        logger.info("Starting continual training...")
+        trainer.train()
+        logger.info(f"Training completed. Saving to checkpoint: {save_to_path}")
+        trainer.save_model(save_to_path)
+
+        # Perform post-training calculations based on inference type
+        if inference_type == "adb":
+            logger.info("Calculating ADB centers and radii...")
+            self._post_train_adb(save_to_path, dataset)
+            logger.info(f"ADB data saved to {save_to_path}")
+        elif inference_type == "prob":
+            logger.info("Saving inference type for probability-based inference...")
+            self._post_train_prob(save_to_path)
+            logger.info(f"Probability-based inference config saved to {save_to_path}")
+
+        # Extract and return the checkpoint identifier
+        checkpoint_id = Path(save_to_path).name
+        return checkpoint_id
+
     def load_model(self):
         latest_checkpoint_path = self.get_latest_item_path()
         if latest_checkpoint_path is None:
