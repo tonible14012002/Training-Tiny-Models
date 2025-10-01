@@ -154,3 +154,7 @@ class EvaluationResponse(BaseModel):
     checkpoint_path: str
     evaluation_data_info: Dict[str, Any]
     results: Dict[str, Any]
+
+class FixGenRequest(BaseModel):
+    prompt: str
+    amount: Optional[int] = None

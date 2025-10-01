@@ -11,36 +11,6 @@ logger = logging.getLogger(__name__)
 class DataGeneratorV2(DataGenerator):
     SEED_PROMPT_KEY = "v2/train/seed"
     DEFAULT_TOTAL_MESSAGES = 600  # Default target for V2 (higher due to parallel generation)
-
-    def _calculate_v2_generation_params(self, expect_total_message: int) -> tuple[int, int, int]:
-        """
-        Calculate PARALLEL_GENERATIONS, TOTAL_MESSAGE_PER_BATCH, and batches for V2 generator.
-
-        Args:
-            expect_total_message: Expected total number of messages to generate
-
-        Returns:
-            Tuple of (PARALLEL_GENERATIONS, TOTAL_MESSAGE_PER_BATCH, batches_needed)
-        """
-        # Each API call generates ~30 messages
-        messages_per_api_call = self.ESTIMATED_MESSAGES_PER_API_CALL
-
-        # For V2, we run parallel generations, so total per batch = parallel_gens * messages_per_api_call
-        # But we also run multiple batches, so: total = parallel_gens * messages_per_api_call * batches
-
-        # Optimize for reasonable parallel calls (not too many to avoid rate limits)
-        max_parallel = 20
-        min_parallel = 5
-
-        # Start with a reasonable parallel count
-        parallel_gens = min(max_parallel, max(min_parallel, expect_total_message // messages_per_api_call))
-
-        # Calculate how many batches we need
-        messages_per_batch_cycle = parallel_gens * messages_per_api_call
-        batches_needed = max(1, (expect_total_message + messages_per_batch_cycle - 1) // messages_per_batch_cycle)
-
-        return parallel_gens, messages_per_api_call, batches_needed
-
     async def fresh_gen(self, human_seeds: List[Sample], expect_total_message: int = None) -> List[Sample]:
         """Generate fresh data using the default prompt"""
         # Use provided target or default
@@ -117,11 +87,8 @@ class DataGeneratorV2(DataGenerator):
 
         return all_results
 
-    async def fix_gen(self, prompt: str, amount: int = None) -> List[Sample]:
+    async def fix_gen(self, human_seeds: List[Sample], prompt: str, amount: int = None) -> List[Sample]:
         """Generate data using a custom prompt from PromptBuilder for fixing errors"""
-        # Load human seeds for generation
-        human_seeds = self.data_manager.get_human_seeds()
-
         # Use provided amount or default
         target_messages = amount or self.DEFAULT_TOTAL_MESSAGES
 
@@ -160,3 +127,33 @@ class DataGeneratorV2(DataGenerator):
 
         logger.debug(f"Internal deduplication: {len(samples)} -> {len(deduped_samples)} samples")
         return deduped_samples
+
+    def _calculate_v2_generation_params(self, expect_total_message: int) -> tuple[int, int, int]:
+        """
+        Calculate PARALLEL_GENERATIONS, TOTAL_MESSAGE_PER_BATCH, and batches for V2 generator.
+
+        Args:
+            expect_total_message: Expected total number of messages to generate
+
+        Returns:
+            Tuple of (PARALLEL_GENERATIONS, TOTAL_MESSAGE_PER_BATCH, batches_needed)
+        """
+        # Each API call generates ~30 messages
+        messages_per_api_call = self.ESTIMATED_MESSAGES_PER_API_CALL
+
+        # For V2, we run parallel generations, so total per batch = parallel_gens * messages_per_api_call
+        # But we also run multiple batches, so: total = parallel_gens * messages_per_api_call * batches
+
+        # Optimize for reasonable parallel calls (not too many to avoid rate limits)
+        max_parallel = 20
+        min_parallel = 5
+
+        # Start with a reasonable parallel count
+        parallel_gens = min(max_parallel, max(min_parallel, expect_total_message // messages_per_api_call))
+
+        # Calculate how many batches we need
+        messages_per_batch_cycle = parallel_gens * messages_per_api_call
+        batches_needed = max(1, (expect_total_message + messages_per_batch_cycle - 1) // messages_per_batch_cycle)
+
+        return parallel_gens, messages_per_api_call, batches_needed
+

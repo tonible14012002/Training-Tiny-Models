@@ -76,7 +76,6 @@ async def generate_fresh_eval_data(request: Request):
     # human_seeds = TypeAdapter(List[schemas.Sample]).validate_python(converted)
 
     # Optional: Load seed messages for open intent (can be empty for now)
-
     human_seed_messages = []  # Can be extended to load from a file
 
     # Generate fresh evaluation data (both intent and open intent)
@@ -356,3 +355,43 @@ async def make_fix_prompt(request: Request, payload: schemas.BuildPromptRequest)
         "status": "completed",
         "prompt": prompt
     }
+
+@router.post("/generate-fix-data")
+async def generate_fix_data(request: Request, payload: schemas.FixGenRequest):
+    """Generate synthetic data using custom prompt for fixing model issues."""
+    data_generator_v2: services.DataGeneratorV2 = request.app.state.data_generator_v2
+
+    try:
+        # Load human seed data
+        path = ".cache/human_seed.json"
+        with open(path, "r") as f:
+            seed_data = json.load(f)
+        logger.info(f"Loaded {len(seed_data)} seed examples from {path}")
+
+        # Convert to Sample objects
+        converted = [
+            {**seed, 'label': PAYMENT_LABEL_V2.to_str(seed['label'])}
+            for seed in seed_data
+        ]
+        human_seeds = TypeAdapter(List[schemas.Sample]).validate_python(converted)
+
+        # Generate data using the fix_gen method with custom prompt
+        results = await data_generator_v2.fix_gen(
+            human_seeds=human_seeds,
+            prompt=payload.prompt,
+            amount=payload.amount
+        )
+
+        return {
+            "message": f"Fix data generation completed. Generated {len(results)} samples.",
+            "status": "completed",
+            "samples_generated": len(results)
+        }
+
+    except Exception as e:
+        logger.error(f"Fix data generation failed: {str(e)}")
+        return {
+            "message": f"Fix data generation failed: {str(e)}",
+            "status": "error",
+            "samples_generated": 0
+        }

@@ -42,6 +42,7 @@ Generate examples that show different types of payment intentions in chat messag
    - JSON output format: {{ "msg": "mesasge", "label": "payment_intent" }}
    - generate equally quantity for each label.
    - valid labels: payment_request, open_intent
+   - English only content.
 
 Simulate following persona for each message
 
