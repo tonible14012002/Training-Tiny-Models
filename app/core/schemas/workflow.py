@@ -29,6 +29,10 @@ class BaseLabelConfig:
     def to_str(label: int) -> str:
         raise NotImplementedError
 
+    @staticmethod
+    def get_label_explanation() -> dict:
+        raise NotImplementedError
+
 class PAYMENT_LABEL(BaseLabelConfig):
     PAYMENT_INTENT = 0
     PAYMENT_REQUEST = 1
@@ -76,6 +80,14 @@ class PAYMENT_LABEL(BaseLabelConfig):
         else:
             raise ValueError(f"Unknown label: {label}")
 
+    @staticmethod
+    def get_label_explanation() -> dict:
+        return {
+            "payment_intent": "User intends to send/pay money to someone",
+            "payment_request": "User asking someone to send them money",
+            "smart_payment_system_command": "User instructing a system to make a payment"
+        }
+
 class PAYMENT_LABEL_V2(BaseLabelConfig):
     PAYMENT_INTENT = 1
     PAYMENT_REQUEST = 0
@@ -122,6 +134,14 @@ class PAYMENT_LABEL_V2(BaseLabelConfig):
             return "open_intent"
         else:
             raise ValueError(f"Unknown label: {label}")
+
+    @staticmethod
+    def get_label_explanation() -> dict:
+        return {
+            "payment_intent": "The user is declaring they will send money right now or in near future OR The user gives an imperative instruction to a system to execute a payment",
+            "payment_request": "The user request to receive money (can be request, inform, force, remind, ...)",
+            "open_intent": "All arbitrary chat messages that are not related to any payment intent"
+        }
 
 class EvaluationRequest(BaseModel):
     iteration_number: Optional[int] = None

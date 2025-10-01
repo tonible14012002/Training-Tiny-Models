@@ -126,23 +126,23 @@ EXAMPLE_ERROR_BUCKETS = [
 
 class DataGenerationAction(BaseModel):
     """Specific data generation action that can be programmatically executed"""
-    action_type: str = Field(description="Type of action: 'generate_more', 'filter_out', 'replace_words', 'balance_distribution'")
-    target_label: str = Field(description="The label this action targets")
-    expected_count: int = Field(description="Expected number of samples to generate/modify")
+    label: str = Field(description="The label for which to generate/modify examples")
+    # expected_count: int = Field(description="Expected number of samples to generate/modify")
 
     # Specific instructions
     keywords_to_include: List[str] = Field(default=[], description="Specific keywords/phrases that should appear in generated examples")
     keywords_to_avoid: List[str] = Field(default=[], description="Keywords/phrases to avoid or filter out")
-    word_replacements: Dict[str, List[str]] = Field(default={}, description="Word replacement mappings: original -> [alternatives]")
+    # word_replacements: Dict[str, List[str]] = Field(default={}, description="Word replacement mappings: original -> [alternatives]")
 
     # Pattern specifications
     sentence_patterns: List[str] = Field(default=[], description="Specific sentence structures/patterns to follow")
     context_requirements: List[str] = Field(default=[], description="Required contextual elements")
     diversity_constraints: List[str] = Field(default=[], description="Diversity requirements (e.g., 'vary sentence length', 'use different personas')")
+    ignore: bool = Field(default=False, description="True if no action needed for this label")
 
     # Distribution targets
-    min_examples: Optional[int] = Field(default=None, description="Minimum examples needed for this pattern")
-    target_distribution: Optional[float] = Field(default=None, description="Target percentage of total dataset")
+    # min_examples: Optional[int] = Field(default=None, description="Minimum examples needed for this pattern")
+    # target_distribution: Optional[float] = Field(default=None, description="Target percentage of total dataset")
 
 class ErrorPatternAnalysis(BaseModel):
     """LLM-generated analysis of error patterns for misclassified examples"""
@@ -158,3 +158,7 @@ class ErrorPatternAnalysis(BaseModel):
     data_actions: List[DataGenerationAction] = Field(
         description="Specific, programmable actions to fix the identified issues"
     )
+
+
+class BuildPromptRequest(BaseModel):
+    actions: List[DataGenerationAction]

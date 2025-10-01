@@ -6,5 +6,5 @@ from .eval_data_manager.eval_data_manager import EvalDataManager
 from .trainer.trainer import TrainerService
 from .model_analyzer import ModelAnalyzer
 from .error_pattern_analyzer import ErrorPatternAnalysisService
-from .prompt_builder import PromptBuilderService, ConsolidatedPrompt
 from .orchestrator import TrainingOrchestrator
+from .prompt_builder import PromptBuilder

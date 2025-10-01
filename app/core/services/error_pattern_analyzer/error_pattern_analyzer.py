@@ -31,7 +31,6 @@ class ErrorPatternAnalysisService:
         Returns:
             List of ErrorPatternAnalysis objects, one per error group
         """
-        # Extract error groups (expected_label -> predicted_label)
         error_groups = self._extract_error_groups(errors_by_label)
 
         if not error_groups:

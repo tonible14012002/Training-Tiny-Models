@@ -37,24 +37,6 @@ def _detect_inference_type(checkpoint_path: str) -> str:
     # Default to ADB for backward compatibility
     return "adb"
 
-@router.post("/generate-data")
-async def generate_synthetic_data(request: Request):
-    data_generator: services.DataGenerator = request.app.state.data_generator
-    path = ".cache/human_seed.json"
-    # load text from json file
-    with open(path, "r") as f:
-        seed_data = json.load(f)
-    logger.info(f"Loaded {len(seed_data)} seed examples from {path}")
-    converted = [
-        {**seed, 'label': PAYMENT_LABEL_V2.to_str(seed['label'])}
-        for seed in seed_data
-    ]
-
-    human_seeds = TypeAdapter(List[schemas.Sample]).validate_python(converted)
-    await data_generator.fresh_gen(human_seeds)
-
-    return {"message": "Data generation started", "status": "in_progress"}
-
 @router.post("/generate-data-v2")
 async def generate_synthetic_data_v2(request: Request):
     """Generate synthetic data using DataGeneratorV2 with parallel processing."""
@@ -268,45 +250,6 @@ async def inference_model(request: Request, payload: schemas.InferenceRequest):
         }
     }
 
-@router.post("/auto-train-pipeline")
-async def start_auto_training_pipeline(
-    request: Request,
-    max_iterations: int = 10,
-    target_accuracy: float = 0.85,
-    target_macro_f1: float = 0.80,
-    early_termination_threshold: float = 0.02,
-    data_generation_batch_size: int = 15
-):
-    """
-    Start the automated training pipeline that iteratively:
-    1. Generates new training data
-    2. Trains model with updated dataset
-    3. Evaluates model performance
-    4. Checks for improvement and termination conditions
-    5. Repeats until target metrics are achieved or max iterations reached
-
-    Pipeline includes early termination if no significant improvement is seen
-    over multiple consecutive iterations.
-    """
-    training_orchestrator: services.TrainingOrchestrator = request.app.state.training_orchestrator
-
-    # Create pipeline configuration
-    from app.core.schemas.orchestrator import PipelineConfig
-
-    config = PipelineConfig(
-        max_iterations=max_iterations,
-        target_accuracy=target_accuracy,
-        target_macro_f1=target_macro_f1,
-        early_termination_threshold=early_termination_threshold,
-        data_generation_batch_size=data_generation_batch_size
-    )
-
-    # Start the pipeline
-    result = await training_orchestrator.start_auto_training_pipeline(config)
-
-    return result
-
-
 @router.post("/analyze-error-patterns")
 async def analyze_error_patterns(request: Request):
     """
@@ -361,13 +304,8 @@ async def analyze_error_patterns(request: Request):
                 "error_analyses": []
             }
 
-        # Define label explanations for payment classification
-        label_explanations = {
-            "PAYMENT_REQUEST": "User asking someone to send them money",
-            "PAYMENT_SEND": "User intends to send/pay money to someone",
-            "PAYMENT_COMMAND": "User instructing a system to make a payment",
-            "NO_PAYMENT": "No payment intention present"
-        }
+        # Get label explanations from the label config
+        label_explanations = PAYMENT_LABEL_V2.get_label_explanation()
 
         # Analyze error patterns using LLM
         logger.info("Starting LLM-based error pattern analysis...")
@@ -399,3 +337,22 @@ async def analyze_error_patterns(request: Request):
             "error_analyses": []
         }
 
+
+@router.post("/make-fix-prompt")
+async def make_fix_prompt(request: Request, payload: schemas.BuildPromptRequest):
+    prompt_builder: services.PromptBuilder = request.app.state.prompt_builder
+
+    prompt = prompt_builder.build_generate_data_prompt(payload.actions)
+
+    if prompt is None:
+        return {
+            "message": "No prompt generated. Ensure at least one action is of type 'generate_more'.",
+            "status": "error",
+            "prompt": ""
+        }
+
+    return {
+        "message": "Prompt generated successfully",
+        "status": "completed",
+        "prompt": prompt
+    }

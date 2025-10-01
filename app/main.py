@@ -47,12 +47,12 @@ async def lifespan(app: FastAPI):
     eval_data_manager = services.EvalDataManager(label_config)
 
     logger.info("Initializing data generator...")
-    data_generator = services.DataGenerator(
-        llm=teacher_llm,
-        prompt_mgr=prompt_mgr,
-        data_manager=data_manager,
-        eval_data_manager=eval_data_manager,
-    )
+    # data_generator = services.DataGenerator(
+    #     llm=teacher_llm,
+    #     prompt_mgr=prompt_mgr,
+    #     data_manager=data_manager,
+    #     eval_data_manager=eval_data_manager,
+    # )
 
     logger.info("Initializing data generator v2...")
     data_generator_v2 = services.DataGeneratorV2(
@@ -89,26 +89,25 @@ async def lifespan(app: FastAPI):
         prompt_mgr=prompt_mgr
     )
 
-    logger.info("Initializing training orchestrator...")
-    training_orchestrator = services.TrainingOrchestrator(
-        data_generator=data_generator,
-        trainer_service=trainer_service,
-        model_analyzer=model_analyzer,
-        data_manager=data_manager,
-        eval_data_manager=eval_data_manager,
-        label_config=label_config
+    logger.info("Initializing prompt builder...")
+    prompt_builder = services.PromptBuilder(
+        llm=teacher_llm,
+        prompt_mgr=prompt_mgr,
+        label_config=label_config,
     )
+
+    logger.info("Initializing training orchestrator...")
 
     app.state.data_manager = data_manager
     app.state.eval_data_manager = eval_data_manager
-    app.state.data_generator = data_generator
+    # app.state.data_generator = data_generator
     app.state.data_generator_v2 = data_generator_v2
     app.state.eval_generator = eval_generator
     app.state.prompt_mgr = prompt_mgr
     app.state.trainer_service = trainer_service
     app.state.model_analyzer = model_analyzer
     app.state.error_pattern_analyzer = error_pattern_analyzer
-    app.state.training_orchestrator = training_orchestrator
+    app.state.prompt_builder = prompt_builder
 
     yield  # The app runs here
 

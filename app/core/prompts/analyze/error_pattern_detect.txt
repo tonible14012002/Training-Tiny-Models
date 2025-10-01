@@ -10,33 +10,82 @@ Your task:
 1. Identify SPECIFIC, CONCRETE data issues that caused these misclassifications. Be precise about what's missing or wrong in the dataset.
 
 Examples of specific issues:
-- "Missing examples where user says 'me' as payment recipient"
-- "Only 3 examples use word 'transfer' for payment_request class"
-- "No examples with question format for payment_send"
-- "Word 'pay' appears in 80% of payment_intent but only 20% of payment_request"
+- "Model mistake "send me" as payment_intent to another while it should be payment_request"
 
-2. For each issue, provide PROGRAMMABLE data generation actions with exact specifications:
+2. For each issue, provide PROGRAMMABLE data stratgey for next data generation for fixing:
 
-Action types available:
-- "generate_more": Create more examples of specific patterns
-- "filter_out": Remove problematic examples
-- "replace_words": Replace confusing words with alternatives
-- "balance_distribution": Adjust class distribution or keyword frequency
-
-For each action, specify:
+For each label, specify:
+- Ignore: If current label not related to the issues
 - EXACT expected_count (number of examples to generate/modify)
 - SPECIFIC keywords_to_include or keywords_to_avoid
 - PRECISE sentence_patterns to follow
 - CLEAR diversity_constraints
-- CONCRETE min_examples or target_distribution
 
-Example action:
-- action_type: "generate_more"
-- target_label: "payment_request"
-- expected_count: 25
-- keywords_to_include: ["me", "my", "I need"]
-- sentence_patterns: ["Can you [action] me [amount]", "I need you to [action] [amount]"]
-- diversity_constraints: ["vary pronouns", "use different amounts", "include informal language"]
-- min_examples: 50
+Example Output:
+[
+  {{
+    "label": "open_intent",
+    "keywords_to_include": [
+      "pay",
+      "paid",
+      "transfer",
+      "reimburse",
+      "fee",
+      "payment"
+    ],
+    "keywords_to_avoid": [],
+    "sentence_patterns": [
+      "Did you [action] the [fee/bill/payment] yet?",
+      "I already [action] the [fee/bill/payment].",
+      "Was the [payment/fee] included in...?",
+      "Have you ever [action] for...?",
+      "I heard you paid for...",
+      "Did you end up reimbursing...?",
+      "Was the [cost/fee] already covered?",
+      "I transferred the money for...",
+      "Just paid the [bill/fee/...], so we're all set."
+    ],
+    "context_requirements": [],
+    "diversity_constraints": [
+      "Vary tense (past, present, future)",
+      "Include questions and statements",
+      "Vary subjects (I, you, they, we)"
+    ],
+    "min_examples": 40,
+    "target_distribution": null
+  }},
+  {{
+    "label": "payment_request",
+    "keywords_to_include": [
+      "can you",
+      "please",
+      "I need you to",
+      "could you",
+      "would you mind"
+    ],
+    "keywords_to_avoid": [],
+    "word_replacements": {{}},
+    "sentence_patterns": [
+      "Can you pay the [fee/bill] for me?",
+      "Could you send me [amount]?",
+      "I need you to cover the [cost/fee].",
+      "Would you mind paying the [fee/bill]?",
+      "Please send me [amount] for..."
+    ],
+    "context_requirements": [],
+    "diversity_constraints": [
+      "Use different request phrasings",
+      "Vary formality levels"
+    ],
+    "min_examples": 30,
+    "target_distribution": null
+  }},
+  {{
+    "label": "open_intent",
+    "ignore": true
+  }}
+]
 
-Be specific with numbers, keywords, and patterns - avoid abstract recommendations.
+### Output Requirement
+1. Each label MUST have a corresponding action in output list.
+2. Label that do not related to issues will be ignore = True to indicate no action needed

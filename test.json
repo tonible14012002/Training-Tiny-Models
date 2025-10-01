@@ -1,0 +1,381 @@
+[
+  {
+    "predicted_label": "open_intent",
+    "expected_label": "payment_request",
+    "identified_issues": [
+      "Lack of payment_request examples with indirect or casual requests (e.g., 'spot me', 'cover my share', 'chip in')",
+      "Missing coverage of alternative payment verbs (spot, cover, lend, front, handle, chip in, reimburse, send over, pay the [person], etc.)",
+      "Insufficient examples of payment_request using non-explicit monetary amounts (e.g., 'for the pizza', 'for the groceries', not just $/amount)",
+      "Absence of requests for non-cash/crypto items (tickets, groceries, supplies, fees, deposits, bills) in the dataset",
+      "Underrepresentation of informal/formal variants and diverse phrasings for asking for payment/help with costs"
+    ],
+    "data_actions": [
+      {
+        "label": "payment_request",
+        "keywords_to_include": [
+          "spot me",
+          "cover my share",
+          "chip in",
+          "lend me",
+          "front the cash",
+          "handle the bill",
+          "reimburse",
+          "send over",
+          "pay the [person]",
+          "contribute",
+          "help out with"
+        ],
+        "keywords_to_avoid": [],
+        "sentence_patterns": [
+          "Can you spot me for [event/item]?",
+          "Would you mind covering [cost/item] this time?",
+          "Could you send over your share for [expense]?",
+          "Mind grabbing [item] and I’ll pay you back?",
+          "Is it possible for you to pay the [person/fee] upfront?",
+          "Can you handle the [bill/fee] for me?",
+          "Could you lend me [amount/item] for [reason]?",
+          "Would you be able to contribute to [fundraiser/event/item]?",
+          "Can you help out with [expense/item] this month?",
+          "Could you pay [person] his fee for [service]?",
+          "Would you mind transferring me for [expense]?",
+          "Can you front the cash for [item/event]?",
+          "Can you send me your half for [shared expense]?",
+          "Is it okay if I borrow some [money/crypto] for [reason]?",
+          "Let me know if you need help with [expense]."
+        ],
+        "context_requirements": [
+          "Requests must be directed at another person, not statements of having paid"
+        ],
+        "diversity_constraints": [
+          "Vary verbs (spot, cover, lend, pay, send, transfer, chip in, reimburse, contribute, handle, help)",
+          "Include both formal and informal phrasings",
+          "Vary request structure (question, polite request, direct request, offer to reimburse)",
+          "Include diverse recipients (friend, group, specific person, generic)",
+          "Include both cash and non-cash requests (crypto, Venmo, PayPal, supplies, bills, tickets, etc.)"
+        ]
+      },
+      {
+        "label": "open_intent",
+        "keywords_to_include": [],
+        "keywords_to_avoid": [],
+        "sentence_patterns": [],
+        "context_requirements": [],
+        "diversity_constraints": []
+      }
+    ]
+  },
+  {
+    "predicted_label": "payment_intent",
+    "expected_label": "payment_request",
+    "identified_issues": [
+      "Model treats imperative or polite payment instructions (e.g., 'Please send', 'Pay the invoice') as payment_intent instead of recognizing them as payment_request from the speaker to the recipient.",
+      "Model does not distinguish between requests for payment and declarations of payment, especially when polite or imperative forms are used.",
+      "Lack of diverse phrasings (e.g., indirect requests, context-based requests, questions) for payment_request in the dataset, leading to confusion when request is implied rather than direct."
+    ],
+    "data_actions": [
+      {
+        "label": "payment_request",
+        "keywords_to_include": [
+          "can you",
+          "please",
+          "could you",
+          "would you mind",
+          "need",
+          "help with",
+          "borrow",
+          "给我",
+          "能不能",
+          "麻烦"
+        ],
+        "keywords_to_avoid": ["I will pay", "I'm paying", "I'll send"],
+        "sentence_patterns": [
+          "Can you [send/transfer/pay] [amount/item] for me?",
+          "Please [send/pay/transfer] [amount/item] when you can.",
+          "Could you help me with [fee/bill/amount]?",
+          "I need [amount] for [reason].",
+          "Can I borrow [amount] for [reason]?",
+          "请问能不能[给我/借我][钱/数额][买物品/原因]？"
+        ],
+        "context_requirements": [
+          "Speaker is NOT offering to pay, but is asking for payment/help/money."
+        ],
+        "diversity_constraints": [
+          "Vary formality (casual to polite)",
+          "Include direct, indirect, and context-based requests",
+          "Include requests phrased as needs, help, or borrowing",
+          "Vary pronoun usage (I, we, you)"
+        ]
+      }
+    ]
+  },
+  {
+    "predicted_label": "payment_request",
+    "expected_label": "payment_intent",
+    "identified_issues": [
+      "Insufficient examples where the speaker explicitly states they are sending/paying money now or soon (declarative future/present action) as payment_intent",
+      "Lack of imperative payment instructions as payment_intent (e.g., 'Let me pay', 'I'll pay', 'I'm sending')",
+      "Over-reliance on presence of 'sending'/'paying' as payment_request trigger, missing context that action is being done by speaker, not a request from speaker",
+      "Missing coverage of varied payment verbs for payment_intent (e.g., 'wire', 'deposit', 'transfer', 'handle', 'process')"
+    ],
+    "data_actions": [
+      {
+        "label": "payment_intent",
+        "keywords_to_include": [
+          "sending",
+          "paying",
+          "transferring",
+          "depositing",
+          "wiring",
+          "covering",
+          "handling",
+          "processing",
+          "just paid",
+          "I'll pay",
+          "let me pay",
+          "I'll handle",
+          "sending you",
+          "transferring to your",
+          "just sent",
+          "I'm about to"
+        ],
+        "keywords_to_avoid": [
+          "can you",
+          "please",
+          "could you",
+          "would you mind",
+          "I need you to",
+          "send me",
+          "pay me",
+          "request",
+          "remind",
+          "ask"
+        ],
+        "sentence_patterns": [
+          "I'm [sending/paying/transferring/etc.] [amount/object] now.",
+          "I'll [pay/cover/handle] the [bill/fee/etc.].",
+          "Just [paid/sent/transferred] the [money/crypto/etc.], check your [account/app/wallet].",
+          "Let me [handle/pay for/cover] the [item/service].",
+          "Sending you [amount] for [reason]."
+        ],
+        "context_requirements": [
+          "Speaker is performing or declaring intent to perform a payment action themselves"
+        ],
+        "diversity_constraints": [
+          "Vary verbs used for payment action",
+          "Use both present and immediate future tense",
+          "Include statements and imperatives",
+          "Vary context: rent, bills, services, fees, reimbursements"
+        ]
+      },
+      {
+        "label": "payment_request",
+        "keywords_to_include": [],
+        "keywords_to_avoid": [],
+        "sentence_patterns": [],
+        "context_requirements": [],
+        "diversity_constraints": []
+      }
+    ]
+  },
+  {
+    "predicted_label": "open_intent",
+    "expected_label": "payment_intent",
+    "identified_issues": [
+      "Lack of imperatives and first-person commitment phrases as payment_intent",
+      "Insufficient coverage of informal payment declarations as payment_intent",
+      "Missing examples of payment_intent using branded verbs (e.g., 'Venmo-ing')",
+      "Model not recognizing future/planned payment declarations as payment_intent",
+      "Ambiguous verbs like 'cover', 'settle', 'wire', and 'order' not mapped as payment_intent"
+    ],
+    "data_actions": [
+      {
+        "label": "payment_intent",
+        "keywords_to_include": [
+          "cover",
+          "settle",
+          "Venmo-ing",
+          "wire",
+          "order",
+          "processing",
+          "transferring",
+          "send",
+          "pay"
+        ],
+        "keywords_to_avoid": [],
+        "sentence_patterns": [
+          "I'm going to [action] the [bill/fee/tab]",
+          "[Action]-ing you for the [item/service] now",
+          "I'll [action] the [amount/item] by [time]",
+          "Transferring the [payment/type] for the [reason]",
+          "I'm processing your [payment/invoice] right now.",
+          "Going to settle the [expense] when we [condition]",
+          "I’m going to order [item] for you, my treat."
+        ],
+        "context_requirements": [
+          "Speaker is declaring or initiating a payment"
+        ],
+        "diversity_constraints": [
+          "Vary tense (present, future, progressive)",
+          "Include both formal and informal payment verbs",
+          "Vary payment methods (wire, Venmo, crypto, invoice, order)",
+          "Vary recipient (you, them, for event, etc.)"
+        ]
+      },
+      {
+        "label": "open_intent",
+        "keywords_to_include": [],
+        "keywords_to_avoid": [],
+        "sentence_patterns": [],
+        "context_requirements": [],
+        "diversity_constraints": []
+      },
+      {
+        "label": "payment_request",
+        "keywords_to_include": [],
+        "keywords_to_avoid": [],
+        "sentence_patterns": [],
+        "context_requirements": [],
+        "diversity_constraints": []
+      }
+    ]
+  },
+  {
+    "predicted_label": "payment_request",
+    "expected_label": "open_intent",
+    "identified_issues": [
+      "Model overfits to payment/transfer/reimburse keywords as payment_request, missing context where user is just mentioning payments, not requesting",
+      "Insufficient examples where user discusses payments as statements/questions without requesting action",
+      "Lack of examples with varied subjects (I, you, they, we) in non-request payment conversations",
+      "Lack of distinction between reporting payment and requesting payment (e.g. 'I paid' vs 'Can you pay me?')"
+    ],
+    "data_actions": [
+      {
+        "label": "open_intent",
+        "keywords_to_include": [
+          "pay",
+          "paid",
+          "transfer",
+          "reimburse",
+          "fee",
+          "payment"
+        ],
+        "keywords_to_avoid": [
+          "can you",
+          "could you",
+          "please",
+          "I need you to",
+          "would you mind"
+        ],
+        "sentence_patterns": [
+          "Did you [action] the [fee/bill/payment] yet?",
+          "I already [action] the [fee/bill/payment].",
+          "Was the [payment/fee] included in...?",
+          "Have you ever [action] for...?",
+          "I heard you paid for...",
+          "Did you end up reimbursing...?",
+          "Was the [cost/fee] already covered?",
+          "I transferred the money for...",
+          "Just paid the [bill/fee/...], so we're all set."
+        ],
+        "context_requirements": [],
+        "diversity_constraints": [
+          "Vary tense (past, present, future)",
+          "Include questions and statements",
+          "Vary subjects (I, you, they, we)"
+        ]
+      },
+      {
+        "label": "payment_request",
+        "keywords_to_include": [
+          "can you",
+          "please",
+          "I need you to",
+          "could you",
+          "would you mind"
+        ],
+        "keywords_to_avoid": [],
+        "sentence_patterns": [
+          "Can you pay the [fee/bill] for me?",
+          "Could you send me [amount]?",
+          "I need you to cover the [cost/fee].",
+          "Would you mind paying the [fee/bill]?",
+          "Please send me [amount] for..."
+        ],
+        "context_requirements": [],
+        "diversity_constraints": [
+          "Use different request phrasings",
+          "Vary formality levels"
+        ]
+      }
+    ]
+  },
+  {
+    "predicted_label": "payment_intent",
+    "expected_label": "open_intent",
+    "identified_issues": [
+      "Model over-relies on payment-related keywords (e.g., pay, payment, reimbursement, fee, transfer) to trigger payment_intent, even when used in past tense or as a thank you.",
+      "Insufficient examples where payment-related terms are used in gratitude, past-tense, or narrative contexts (not current/future intent).",
+      "Lack of coverage for payment-related discussions that are not explicit payment declarations/imperatives, such as referencing past payments or discussing payments in non-instructional ways.",
+      "Model confuses statements about historical payments, reimbursements, or costs with immediate intent to pay."
+    ],
+    "data_actions": [
+      {
+        "label": "open_intent",
+        "keywords_to_include": [
+          "pay",
+          "paid",
+          "payment",
+          "reimbursed",
+          "reimbursement",
+          "fee",
+          "cost",
+          "transfer"
+        ],
+        "keywords_to_avoid": [
+          "I will pay",
+          "I'm paying now",
+          "I want to pay",
+          "Please pay",
+          "Pay now",
+          "Send money now"
+        ],
+        "sentence_patterns": [
+          "Thanks for [action] the [payment/fee/bill/transfer] last [time period].",
+          "I appreciate you covering the [cost/fee] for [event/purpose].",
+          "Was the [cost/fee/payment] already handled?",
+          "I remember when you paid for...",
+          "The [organization/person] reimbursed me for...",
+          "That was a lot to pay for [item/event].",
+          "Has the [payment/reimbursement/transfer] been completed yet?",
+          "The [fee/payment] was more than I expected.",
+          "I can't pay you back until [future time], hope that's okay."
+        ],
+        "context_requirements": [
+          "Past tense or non-imperative context",
+          "No current/future commitment to pay or request to pay"
+        ],
+        "diversity_constraints": [
+          "Vary past and present perfect tense",
+          "Include questions, gratitude, and statements",
+          "Vary subject (I, you, they, we, organization)"
+        ]
+      },
+      {
+        "label": "payment_intent",
+        "keywords_to_include": [],
+        "keywords_to_avoid": [],
+        "sentence_patterns": [],
+        "context_requirements": [],
+        "diversity_constraints": []
+      },
+      {
+        "label": "payment_request",
+        "keywords_to_include": [],
+        "keywords_to_avoid": [],
+        "sentence_patterns": [],
+        "context_requirements": [],
+        "diversity_constraints": []
+      }
+    ]
+  }
+]
