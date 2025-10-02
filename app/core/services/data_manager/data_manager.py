@@ -79,18 +79,42 @@ class DataManager(DeduplicationMixin):
                 loaded_data.append(Sample.model_validate(item))
         return loaded_data
 
-    def to_datasets(self) -> Dataset:
-        """
-        Convert current data.txt format to HuggingFace datasets format
+    def load_from_path(self, file_path: str) -> List[Sample]:
+        """Load data from a specific file path.
 
         Args:
-            output_path: Path where to save the dataset
+            file_path: Path to the JSONL file to load
+
+        Returns:
+            List of Sample objects
+        """
+        loaded_data = []
+        if not os.path.exists(file_path):
+            return loaded_data
+
+        with open(file_path, 'r') as f:
+            for line in f:
+                item = json.loads(line)
+                item['label'] = self.label_config.to_str(item['label'])
+                loaded_data.append(Sample.model_validate(item))
+        return loaded_data
+
+    def to_datasets(self, file_path: str = None) -> Dataset:
+        """
+        Convert data to HuggingFace datasets format
+
+        Args:
+            file_path: Optional path to specific JSONL file. If None, uses LOCAL_FILE
 
         Returns:
             Dataset: The converted dataset
         """
-        # Load all samples from data.txt
-        samples = self.load()
+        # Load samples from specified path or default LOCAL_FILE
+        if file_path:
+            samples = self.load_from_path(file_path)
+        else:
+            samples = self.load()
+
         transformed = [{
             "msg": sample.msg,
             "label": self.label_config.from_str(sample.label)

@@ -114,17 +114,19 @@ async def train_student_model(request: Request, inference_type: str = "prob"):
 @router.post("/continual-train")
 async def continual_train_model(
     request: Request,
-    checkpoint_num: int,
-    inference_type: str = "prob"
+    checkpoint_id: str,
+    inference_type: str = "prob",
+    dataset_path: str = None
 ):
     """Continue training from an existing checkpoint with sub-versioning.
 
     Args:
-        checkpoint_num: The base checkpoint number to continue from
+        checkpoint_id: The checkpoint identifier to continue from (e.g., "10", "10.1", "11.2")
         inference_type: Type of inference ("adb" or "prob")
+        dataset_path: Optional path to specific dataset file. If None, uses all accumulated data
 
     Returns:
-        Response with new sub-checkpoint identifier (e.g., "10.1")
+        Response with new sub-checkpoint identifier (e.g., "10.1", "10.2")
     """
     data_manager: services.DataManager = request.app.state.data_manager
     trainer_service: services.TrainerService = request.app.state.trainer_service
@@ -135,28 +137,39 @@ async def continual_train_model(
             "message": "inference_type must be 'adb' or 'prob'"
         }
 
-    # Check if checkpoint exists
-    checkpoint_path = f"{trainer_service.CHECKPOINT_DIR}/{checkpoint_num}"
-    if not Path(checkpoint_path).exists():
+    # Get checkpoint path and validate it exists
+    checkpoint_path = trainer_service.get_item_path_by_id(checkpoint_id)
+    if checkpoint_path is None:
         return {
             "status": "error",
-            "message": f"Checkpoint {checkpoint_num} does not exist"
+            "message": f"Checkpoint {checkpoint_id} does not exist"
+        }
+
+    # Validate dataset_path if provided
+    if dataset_path and not Path(dataset_path).exists():
+        return {
+            "status": "error",
+            "message": f"Dataset file not found: {dataset_path}"
         }
 
     try:
-        ds = data_manager.to_datasets()
-        checkpoint_id = await trainer_service.continual_train(
-            checkpoint_num=checkpoint_num,
+        # Load dataset from specific path or all data
+        ds = data_manager.to_datasets(file_path=dataset_path)
+
+        # Continue training from the specified checkpoint (supports both "10" and "10.1" formats)
+        new_checkpoint_id = await trainer_service.continual_train(
+            checkpoint_id=checkpoint_id,
             dataset=ds,
             inference_type=inference_type
         )
 
         return {
             "status": "completed",
-            "checkpoint_id": checkpoint_id,
-            "base_checkpoint": checkpoint_num,
+            "checkpoint_id": new_checkpoint_id,
+            "base_checkpoint": checkpoint_id,
             "inference_type": inference_type,
-            "message": f"Continual training completed. New checkpoint: {checkpoint_id}"
+            "dataset_path": dataset_path or data_manager.LOCAL_FILE,
+            "message": f"Continual training completed. New checkpoint: {new_checkpoint_id}"
         }
     except Exception as e:
         logger.error(f"Continual training failed: {str(e)}")
@@ -287,16 +300,34 @@ async def evaluate_model(
         )
 
 @router.post("/inference")
-async def inference_model(request: Request, payload: schemas.InferenceRequest):
-    # Get latest checkpoint
-    trainer_service: services.TrainerService = request.app.state.trainer_service
-    checkpoint_pth = trainer_service.get_latest_item_path()
+async def inference_model(
+    request: Request,
+    payload: schemas.InferenceRequest,
+    checkpoint_id: str = None
+):
+    """Run inference on text samples using a trained model.
 
-    if checkpoint_pth is None:
-        return {
-            "message": "No trained model checkpoint found",
-            "status": "error"
-        }
+    Args:
+        payload: InferenceRequest with text samples
+        checkpoint_id: Optional checkpoint identifier (e.g., "10", "10.1"). If not provided, uses latest checkpoint.
+    """
+    trainer_service: services.TrainerService = request.app.state.trainer_service
+
+    # Get checkpoint path - use specific checkpoint if provided, otherwise latest
+    if checkpoint_id:
+        checkpoint_pth = trainer_service.get_item_path_by_id(checkpoint_id)
+        if checkpoint_pth is None:
+            return {
+                "message": f"Checkpoint {checkpoint_id} not found",
+                "status": "error"
+            }
+    else:
+        checkpoint_pth = trainer_service.get_latest_item_path()
+        if checkpoint_pth is None:
+            return {
+                "message": "No trained model checkpoint found",
+                "status": "error"
+            }
 
     # Detect inference type from checkpoint
     inference_type = _detect_inference_type(checkpoint_pth)
@@ -319,7 +350,8 @@ async def inference_model(request: Request, payload: schemas.InferenceRequest):
         "message": "Inference completed",
         "status": "completed",
         "results": {
-            "checkpoint": checkpoint_pth,
+            "checkpoint": str(checkpoint_pth),
+            "checkpoint_id": checkpoint_id or Path(checkpoint_pth).name,
             "inference_type": inference_type,
             "predictions": output,
             "model_info": model_info
@@ -496,8 +528,8 @@ async def generate_fix_data(request: Request, payload: schemas.FixGenRequest):
             "status": "completed",
             "samples_generated": len(all_results),
             "samples_saved": saved_count,
+            "dataset_path": versioned_file_path,  # Path to use with /continual-train
             "main_file": data_manager.LOCAL_FILE,
-            "versioned_file": versioned_file_path
         }
 
     except Exception as e:

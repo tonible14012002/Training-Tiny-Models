@@ -136,22 +136,22 @@ class TrainerService(NumericalFileAccessMixin):
 
     async def continual_train(
         self,
-        checkpoint_num: int,
+        checkpoint_id: str,
         dataset: Dataset,
         inference_type: str = "prob"
     ) -> str:
         """Continue training from an existing checkpoint with sub-versioning.
 
         Args:
-            checkpoint_num: The base checkpoint number to continue from
+            checkpoint_id: The checkpoint identifier to continue from (e.g., "10", "10.1", "10.2")
             dataset: The dataset to train on
             inference_type: Type of inference ("adb" or "prob")
 
         Returns:
-            The new sub-checkpoint identifier (e.g., "10.1")
+            The new sub-checkpoint identifier (e.g., "10.1", "10.2")
         """
-        # Determine paths using mixin method
-        load_from_path, save_to_path = self._get_next_sub_version_paths(checkpoint_num)
+        # Determine paths using the new method that supports any checkpoint ID
+        load_from_path, save_to_path = self.get_next_sub_version_from_id(checkpoint_id)
 
         # Verify source checkpoint exists
         if not Path(load_from_path).exists():
