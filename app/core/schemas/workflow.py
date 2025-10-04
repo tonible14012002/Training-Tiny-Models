@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any, Union
 
 class Sample(BaseModel):
@@ -148,6 +148,20 @@ class EvaluationRequest(BaseModel):
     include_test_cases: bool = False
     include_open_intent: bool = True
     checkpoint_id: Optional[str] = None  # e.g., "1", "2", "1.1", "2.3"
+    threshold_config: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Threshold configuration for predictions",
+        json_schema_extra={
+            "example": {
+                "thresholds": {
+                    "payment_intent": 0.75,
+                    "payment_request": 0.70,
+                    "open_intent": 0.60
+                },
+                "fallback_label": "Unknown"
+            }
+        }
+    )
 
 class EvaluationResponse(BaseModel):
     message: str
@@ -164,3 +178,32 @@ class FixGenRequest(BaseModel):
 class AnalyzeErrorPatternsRequest(BaseModel):
     checkpoint_id: Optional[str] = None  # e.g., "1", "2", "1.1", "2.3"
     iteration_number: Optional[int] = None
+
+class OrchestratorRunRequest(BaseModel):
+    """Request schema for orchestrator run endpoint"""
+    initial_checkpoint_id: str = Field(
+        default="11.7",
+        description="Starting checkpoint ID (e.g., '11.7', '11', '12.5')"
+    )
+    max_iterations: int = Field(
+        default=20,
+        ge=1,
+        le=100,
+        description="Maximum number of training iterations to prevent infinite loops"
+    )
+    target_f1_per_label: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="Target F1 score that all labels must achieve for convergence"
+    )
+    samples_per_action: int = Field(
+        default=500,
+        ge=10,
+        le=2000,
+        description="Number of samples to generate per data generation action"
+    )
+    iteration_number: Optional[int] = Field(
+        default=None,
+        description="Evaluation dataset iteration number to use. If None, uses latest."
+    )

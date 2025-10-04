@@ -165,10 +165,14 @@ class ErrorPatternAnalysisService:
             return None
 
     def _format_test_cases(self, error_cases: List[ErrorCase]) -> str:
-        """Format error cases for the prompt"""
-        formatted_cases = []
+        """Format error cases for the prompt, randomly selecting at most 8 examples"""
+        import random
 
-        for i, case in enumerate(error_cases, 1):
+        # Randomly select at most 8 cases
+        selected_cases = random.sample(error_cases, min(8, len(error_cases)))
+
+        formatted_cases = []
+        for i, case in enumerate(selected_cases, 1):
             formatted_cases.append(f"{i}. \"{case.input.msg}\"")
 
         return "\n".join(formatted_cases)

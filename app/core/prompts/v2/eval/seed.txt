@@ -23,7 +23,14 @@ Generate challenging evaluation data for payment intention detection. Create div
 
 ## Output
 JSON format: {{"msg": "text", "label": "payment_request"}}
-Equal distribution across all three labels.
+
+**CRITICAL: EQUAL DISTRIBUTION REQUIREMENT**
+- YOU MUST generate EXACTLY THE SAME NUMBER of examples for each label
+- All three labels (payment_request, payment_intent, open_intent) must have EQUAL counts
+- If generating 30 examples total → 10 payment_request, 10 payment_intent, 10 open_intent
+- If generating 90 examples total → 30 payment_request, 30 payment_intent, 30 open_intent
+- COUNT your examples per label before submitting to ensure perfect balance
+- DO NOT favor any label over others - strict equality required
 
 ## Personas
 {personas}

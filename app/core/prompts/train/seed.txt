@@ -36,7 +36,14 @@ Generate examples that show different types of payment intentions in chat messag
 ## Output Requirements
    - Each example must be unique — no repeated bigrams or patterns.
    - May include cryptographic/payment system details (msats, malformed invoices, fee caps, route hints).
-   - Cover all three labels evenly.
+
+   **CRITICAL: EQUAL DISTRIBUTION REQUIREMENT**
+   - YOU MUST generate EXACTLY THE SAME NUMBER of examples for each label
+   - All three labels (PAYMENT_REQUEST_INTENT, PAYMENT_SEND_INTENT, SMART_PAYMENT_SYSTEM_COMMAND) must have EQUAL counts
+   - If generating 30 examples total → 10 per label
+   - If generating 90 examples total → 30 per label
+   - COUNT your examples per label before submitting to ensure perfect balance
+   - DO NOT favor any label over others - strict equality required
 
 Simulate following persona for typing the message
 

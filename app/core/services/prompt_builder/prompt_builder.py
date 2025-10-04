@@ -40,8 +40,8 @@ class PromptBuilder:
             if val:
                 final_txt += f"## {key}:\n{val}\n"
             else:
-                final_txt += f"## {key}:\nNo specific requirements be diverse in examples.\n"
-    
+                final_txt += f"## {key}:\nNo specific requirements. Be diverse in examples and ensure equal distribution.\n"
+
         return final_txt.strip()
 
     def _make_label_instruct(self, action: schemas.DataGenerationAction):

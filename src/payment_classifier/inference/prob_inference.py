@@ -1,9 +1,10 @@
 from transformers import AutoTokenizer
 from peft import AutoPeftModelForSequenceClassification
 from app.core.schemas.workflow import BaseLabelConfig
+from app.core.schemas.inference import ThresholdConfig
 from datasets import Dataset
 import torch
-from typing import List, Type, Dict, Any
+from typing import List, Type, Dict, Any, Optional
 from collections import defaultdict
 
 
@@ -11,11 +12,13 @@ class ProbModelInference:
     def __init__(
         self,
         peft_path: str,
-        label_config: Type[BaseLabelConfig]
+        label_config: Type[BaseLabelConfig],
+        threshold_config: Optional[ThresholdConfig] = None
     ):
         self.peft_path = peft_path
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.label_config = label_config
+        self.threshold_config = threshold_config
         self._setup(peft_path)
 
     def info(self):
@@ -62,6 +65,7 @@ class ProbModelInference:
             # Get the predicted label (highest probability)
             predicted_label_id = probs[i].argmax().item()
             predicted_prob = probs[i, predicted_label_id].item()
+            original_label = self.id2label[predicted_label_id]
 
             # Get all probabilities for this sample
             all_probs = {
@@ -69,10 +73,24 @@ class ProbModelInference:
                 for label_id in range(len(self.id2label))
             }
 
+            # Apply threshold check if configured
+            threshold_applied = False
+            final_label = original_label
+            threshold_value = None
+
+            if self.threshold_config and original_label in self.threshold_config.thresholds:
+                threshold_value = self.threshold_config.thresholds[original_label]
+                if predicted_prob < threshold_value:
+                    final_label = self.threshold_config.fallback_label
+                    threshold_applied = True
+
             predicted_label = {
-                "label": self.id2label[predicted_label_id],
+                "label": final_label,
                 "prob": predicted_prob,
                 "all_probs": all_probs,
+                "original_label": original_label,
+                "threshold_applied": threshold_applied,
+                "threshold_value": threshold_value
             }
 
             predictions.append(predicted_label)

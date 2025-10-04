@@ -1,9 +1,10 @@
 from transformers import AutoTokenizer
 from peft import AutoPeftModelForSequenceClassification
 from app.core.schemas.workflow import BaseLabelConfig
+from app.core.schemas.inference import ThresholdConfig
 from datasets import Dataset
 import torch
-from typing import List, Type
+from typing import List, Type, Optional
 from collections import defaultdict
 import json
 from pathlib import Path
@@ -12,11 +13,13 @@ class ADBModelInference:
     def __init__(
         self,
         peft_path: str,
-        label_config: Type[BaseLabelConfig]
+        label_config: Type[BaseLabelConfig],
+        threshold_config: Optional[ThresholdConfig] = None
     ):
         self.peft_path = peft_path
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.label_config = label_config
+        self.threshold_config = threshold_config
         self._setup(peft_path)
         self._load_adb_data(peft_path)
 
@@ -162,27 +165,47 @@ class ADBModelInference:
 
                 if distance < self.intent_radii[label_id]:
                     detected_intents.append((label_id, probs[i, label_id].item(), distance))
-                
+
                 if distance < min_distance:
                     min_distance = distance
                     closest_intent = label_id
-            
+
             if len(detected_intents) > 0:
                 # Get max prob intent among detected intents
                 detected_intents.sort(key=lambda x: x[1], reverse=True)
                 best_intent = detected_intents[0]
+                original_label = self.id2label[best_intent[0]]
+                prob = best_intent[1]
+                distance = best_intent[2]
+
+                # Apply threshold check if configured
+                threshold_applied = False
+                final_label = original_label
+                threshold_value = None
+
+                if self.threshold_config and original_label in self.threshold_config.thresholds:
+                    threshold_value = self.threshold_config.thresholds[original_label]
+                    if prob < threshold_value:
+                        final_label = self.threshold_config.fallback_label
+                        threshold_applied = True
+
                 predicted_label = {
-                    "label": self.id2label[best_intent[0]],
-                    "prob": best_intent[1],
-                    "dis": best_intent[2],
+                    "label": final_label,
+                    "prob": prob,
+                    "dis": distance,
+                    "original_label": original_label,
+                    "threshold_applied": threshold_applied,
+                    "threshold_value": threshold_value
                 }
-                # Choose the intent with the highest probability among detected intents
             else:
                 predicted_label = {
                     "label": "Unknown",
                     "prob": 0.0,
                     "closest": self.id2label[closest_intent],
                     "dis": min_distance,
+                    "original_label": None,
+                    "threshold_applied": False,
+                    "threshold_value": None
                 }
 
             predictions.append(predicted_label)

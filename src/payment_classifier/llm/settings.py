@@ -24,4 +24,7 @@ class LLMSettings(BaseModel):
     temperature: float = Field(default=0.15, description="Temperature value of LLM")
     max_tokens: int = Field(default=1024, description="Maximum number of tokens for generation")
     num_retries: int = Field(default=5, description="Number of retries")
+    rate_limit_retry_delay: int = Field(default=5, description="Base seconds to wait when rate limit is hit (exponential backoff: 5s, 10s, 20s, 40s, 80s)")
+    max_rate_limit_retries: int = Field(default=5, description="Maximum number of rate limit retries")
+    batch_delay: int = Field(default=10, description="Seconds to wait between batches")
     additional_params: Optional[Dict[str, Any]] = Field(default_factory=dict)

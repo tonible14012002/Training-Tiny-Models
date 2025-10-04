@@ -1,16 +1,17 @@
 """Workflow endpoints."""
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Query, Body
 from app.core import services
 from app.core import schemas
 from app.core.schemas.workflow import PAYMENT_LABEL_V2
+from app.core.schemas.inference import ThresholdConfig
 from src.payment_classifier.inference import ADBModelInference
 from src.payment_classifier.inference.prob_inference import ProbModelInference
 
 import json
 import logging
 from pydantic import TypeAdapter
-from typing import List
+from typing import List, Optional, Dict, Any
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -247,9 +248,19 @@ async def evaluate_model(
             open_intent_samples = eval_data_manager.load_open_intent(payload.iteration_number)
             logger.info(f"Loaded {len(open_intent_samples) if open_intent_samples else 0} open intent samples")
 
+        # Parse threshold config if provided
+        threshold_config = None
+        if payload.threshold_config:
+            threshold_config = ThresholdConfig(**payload.threshold_config)
+            logger.info(f"Using threshold config: {threshold_config}")
+
         # Load model and run comprehensive evaluation
         # For PAYMENT_LABEL_V2, always use probability-based inference
-        prob_inferencer = ProbModelInference(peft_path=str(checkpoint_path), label_config=PAYMENT_LABEL_V2)
+        prob_inferencer = ProbModelInference(
+            peft_path=str(checkpoint_path),
+            label_config=PAYMENT_LABEL_V2,
+            threshold_config=threshold_config
+        )
         model_analyzer.load_model(str(checkpoint_path), inferencer=prob_inferencer)
 
         evaluation_result = model_analyzer.analyze_model(
@@ -303,13 +314,30 @@ async def evaluate_model(
 async def inference_model(
     request: Request,
     payload: schemas.InferenceRequest,
-    checkpoint_id: str = None
+    checkpoint_id: Optional[str] = Query(
+        default=None,
+        description="Checkpoint identifier (e.g., '10', '10.1'). If not provided, uses latest checkpoint.",
+        examples=["1"]
+    ),
+    threshold_config: Optional[Dict[str, Any]] = Body(
+        default=None,
+        description="Threshold configuration for predictions",
+        examples=[{
+            "thresholds": {
+                "payment_intent": 0.75,
+                "payment_request": 0.70,
+                "open_intent": 0.60
+            },
+            "fallback_label": "Unknown"
+        }]
+    )
 ):
-    """Run inference on text samples using a trained model.
+    """Run inference on text samples using a trained model with optional threshold-based fallback.
 
     Args:
         payload: InferenceRequest with text samples
         checkpoint_id: Optional checkpoint identifier (e.g., "10", "10.1"). If not provided, uses latest checkpoint.
+        threshold_config: Optional threshold configuration for fallback logic
     """
     trainer_service: services.TrainerService = request.app.state.trainer_service
 
@@ -329,14 +357,28 @@ async def inference_model(
                 "status": "error"
             }
 
+    # Parse threshold config if provided
+    parsed_threshold_config = None
+    if threshold_config:
+        parsed_threshold_config = ThresholdConfig(**threshold_config)
+        logger.info(f"Using threshold config: {parsed_threshold_config}")
+
     # Detect inference type from checkpoint
     inference_type = _detect_inference_type(checkpoint_pth)
 
     # Use appropriate inferencer
     if inference_type == "prob":
-        inferencer = ProbModelInference(checkpoint_pth, label_config=PAYMENT_LABEL_V2)
+        inferencer = ProbModelInference(
+            checkpoint_pth,
+            label_config=PAYMENT_LABEL_V2,
+            threshold_config=parsed_threshold_config
+        )
     else:
-        inferencer = ADBModelInference(checkpoint_pth, label_config=PAYMENT_LABEL_V2)
+        inferencer = ADBModelInference(
+            checkpoint_pth,
+            label_config=PAYMENT_LABEL_V2,
+            threshold_config=parsed_threshold_config
+        )
 
     predictions = inferencer.predict(payload.text)
     output = [
@@ -354,7 +396,8 @@ async def inference_model(
             "checkpoint_id": checkpoint_id or Path(checkpoint_pth).name,
             "inference_type": inference_type,
             "predictions": output,
-            "model_info": model_info
+            "model_info": model_info,
+            "threshold_config": threshold_config
         }
     }
 
@@ -539,4 +582,65 @@ async def generate_fix_data(request: Request, payload: schemas.FixGenRequest):
             "status": "error",
             "samples_generated": 0,
             "samples_saved": 0
+        }
+
+@router.post("/run-orchestrator")
+async def run_orchestrator(
+    request: Request,
+    payload: schemas.OrchestratorRunRequest = schemas.OrchestratorRunRequest()
+):
+    """
+    Run the complete training orchestration pipeline with configurable parameters.
+
+    This endpoint orchestrates an iterative training loop:
+    1. Loads model from initial checkpoint (e.g., "11.7")
+    2. Evaluates on evaluation dataset (configurable iteration)
+    3. Analyzes errors using LLM (error pattern analyzer)
+    4. For each data action from error analysis, generates training samples (configurable amount)
+    5. Continues training from previous checkpoint (creates sub-versions like 11.8, 11.9, etc.)
+    6. Repeats until all labels achieve target F1 (configurable threshold)
+
+    Request Body:
+        - initial_checkpoint_id: Starting checkpoint ID (default: "11.7")
+        - max_iterations: Maximum iterations to prevent infinite loops (default: 20, range: 1-100)
+        - target_f1_per_label: Target F1 score for convergence (default: 0.7, range: 0.0-1.0)
+        - samples_per_action: Samples to generate per data action (default: 500, range: 10-2000)
+        - iteration_number: Eval dataset iteration to use (default: None = latest)
+
+    Returns:
+        Pipeline execution results with final metrics and configuration used
+
+    Example:
+        ```json
+        {
+            "initial_checkpoint_id": "11.7",
+            "max_iterations": 20,
+            "target_f1_per_label": 0.75,
+            "samples_per_action": 600,
+            "iteration_number": 1
+        }
+        ```
+    """
+    orchestrator: services.TrainingOrchestrator = request.app.state.orchestrator
+
+    try:
+        logger.info(f"Starting orchestrator with config: {payload.model_dump()}")
+
+        result = await orchestrator.run(
+            initial_checkpoint_id=payload.initial_checkpoint_id,
+            max_iterations=payload.max_iterations,
+            target_f1_per_label=payload.target_f1_per_label,
+            samples_per_action=payload.samples_per_action,
+            iteration_number=payload.iteration_number
+        )
+        return result
+
+    except Exception as e:
+        logger.error(f"Orchestrator run failed: {str(e)}", exc_info=True)
+        return {
+            "success": False,
+            "status": "error",
+            "message": f"Orchestrator run failed: {str(e)}",
+            "error": str(e),
+            "config": payload.model_dump()
         }

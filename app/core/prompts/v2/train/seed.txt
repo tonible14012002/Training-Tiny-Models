@@ -38,11 +38,16 @@ Generate examples that show different types of payment intentions in chat messag
 ## Output Requirements
    - Each example must be unique — no repeated bigrams or patterns.
    - May include cryptographic/payment system details (msats, malformed invoices, fee caps, route hints).
-   - Cover all three labels evenly.
    - JSON output format: {{ "msg": "mesasge", "label": "payment_intent" }}
-   - generate equally quantity for each label.
-   - valid labels: payment_request, open_intent
+   - valid labels: payment_request, payment_intent, open_intent
    - English only content.
+
+   **CRITICAL: EQUAL DISTRIBUTION REQUIREMENT**
+   - YOU MUST generate EXACTLY THE SAME NUMBER of examples for each label
+   - If generating 30 examples total → 10 payment_request, 10 payment_intent, 10 open_intent
+   - If generating 90 examples total → 30 payment_request, 30 payment_intent, 30 open_intent
+   - COUNT your examples before submitting to ensure perfect balance
+   - DO NOT favor any label over others
 
 Simulate following persona for each message
 
