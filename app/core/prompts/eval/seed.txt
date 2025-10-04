@@ -37,6 +37,14 @@ Example:
 - "Process ACH transfer $5000 to supplier account" (Hard)
 - "Could you advance me funds for the conference registration?" (Hard)
 
+**CRITICAL: EQUAL DISTRIBUTION REQUIREMENT**
+- YOU MUST generate EXACTLY THE SAME NUMBER of examples for each label
+- All three labels (PAYMENT_REQUEST_INTENT, PAYMENT_SEND_INTENT, SMART_PAYMENT_SYSTEM_COMMAND) must have EQUAL counts
+- If generating 30 examples total → 10 PAYMENT_REQUEST_INTENT, 10 PAYMENT_SEND_INTENT, 10 SMART_PAYMENT_SYSTEM_COMMAND
+- If generating 90 examples total → 30 per label
+- COUNT your examples per label before submitting to ensure perfect balance
+- DO NOT favor any label over others - maintain strict equality
+
 Simulate following persona for typing the message
 
 ## Personas

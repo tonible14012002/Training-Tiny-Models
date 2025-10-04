@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     # VERIFIER_MODEL: str = Field(default="gpt-3.5-turbo", description="Verifier model for data validation")
 
     # Data Generation Parameters
+    GENERATE_OPEN_INTENT_EVAL: bool = Field(default=True, description="Generate open intent samples during evaluation data generation")
 
     # Training Configuration
 

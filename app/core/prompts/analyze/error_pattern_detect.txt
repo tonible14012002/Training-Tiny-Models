@@ -1,0 +1,88 @@
+You are analyzing classification errors where a model incorrectly predicted examples as "{predicted_label}" when they actually belong to "{expected_label}".
+
+Context:
+{label_explanation}
+
+Examples to analyze:
+{test_cases}
+
+Your task:
+1. Identify SPECIFIC, CONCRETE data issues that caused these misclassifications. Be precise about what's missing or wrong in the dataset.
+
+Examples of specific issues:
+- "Model confuses 'send me' as payment_intent when it should be payment_request"
+- "Missing examples with past tense verbs in open_intent that contain payment words"
+
+2. Provide PROGRAMMABLE data generation actions for BOTH labels involved in the confusion:
+
+**CRITICAL: You MUST provide actions for BOTH the expected_label and predicted_label to help the model distinguish between them.**
+
+For {expected_label}:
+- Generate examples that clearly represent {expected_label} characteristics
+- Include patterns from misclassified cases but with correct context
+- Keywords, patterns, and diversity that strengthen {expected_label} boundary
+
+For {predicted_label}:
+- Generate examples that clearly represent {predicted_label} characteristics
+- Include similar vocabulary/patterns but with distinct semantic differences
+- Help model learn what truly makes something {predicted_label}
+
+For any OTHER labels not involved in this error:
+- Set ignore: true (no action needed)
+
+For each label action, specify:
+- ignore: false for expected_label and predicted_label, true for others
+- SPECIFIC keywords_to_include or keywords_to_avoid
+- PRECISE sentence_patterns to follow (include examples)
+- CLEAR diversity_constraints
+
+Example Output for error "open_intent -> payment_request":
+[
+  {{
+    "label": "payment_request",
+    "ignore": false,
+    "keywords_to_include": ["can you", "please", "send me", "I need", "could you"],
+    "keywords_to_avoid": ["will send", "I'll pay", "gonna transfer"],
+    "sentence_patterns": [
+      "Can you send me [amount]?",
+      "Please pay me back for [item]",
+      "I need you to transfer [amount]",
+      "Could you cover my [expense]?"
+    ],
+    "diversity_constraints": [
+      "Use different request phrasings (polite, direct, urgent)",
+      "Vary formality levels",
+      "Include both explicit requests and implicit hints"
+    ]
+  }},
+  {{
+    "label": "open_intent",
+    "ignore": false,
+    "keywords_to_include": ["paid", "already sent", "transferred", "received payment"],
+    "keywords_to_avoid": ["will send", "going to pay", "please send"],
+    "sentence_patterns": [
+      "I already paid the [fee/bill]",
+      "Did you transfer the money yet?",
+      "The payment was received yesterday",
+      "I heard you paid for [item]"
+    ],
+    "diversity_constraints": [
+      "Use past tense and completed actions",
+      "Include questions about past payments",
+      "Vary subjects (I, you, they, we)"
+    ]
+  }},
+  {{
+    "label": "payment_intent",
+    "ignore": true
+  }}
+]
+
+### Output Requirements
+1. **ALL labels MUST appear** in output list with corresponding action
+2. **expected_label and predicted_label** MUST have ignore: false with detailed instructions
+3. **Other labels** not involved in error MUST have ignore: true
+4. Each non-ignored label must provide:
+   - Specific keywords that distinguish it from the confused label
+   - Concrete sentence patterns (5-10 examples with [placeholders])
+   - Diversity constraints for varied generation

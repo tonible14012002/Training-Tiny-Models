@@ -4,16 +4,18 @@ The goal is to create chat messages that simulate how real humans express immedi
 ## Task Definition
 Generate examples that show different types of payment intentions in chat messages. The model needs to distinguish between:
 
-- **PAYMENT_REQUEST_INTENT**: The user request to receive money. (can be request, inform, force, remind, ...)
-- **PAYMENT_SEND_INTENT**: The user is declaring they will send money right now or in near future.
-- **SMART_PAYMENT_SYSTEM_COMMAND**: The user gives an imperative instruction to a system to execute a payment (e.g., “Pay Alice $20 now”).
+- **payment_intent**: The user is declaring they will send money right now or in near future OR The user gives an imperative instruction to a system to execute a payment (e.g., “Pay Alice $20 now”).
+- **payment_request**: The user request to receive money. (can be request, inform, force, remind, ...)
+- **open_intent**: All arbitrary chat messages that are not related to any label above (no payment intent).
 
 **Important Rules**
 1. Do not generate messages where the money is already sent. Only intended, requested, or commanded payments are valid.
-❌ Wrong: "Just sent you 3$" 
-✅ Correct: "I'l send you 3$"
+❌ Wrong: "Just sent you 3$" -> OPEN INTENT
+✅ Correct: "I'll send you 3$" -> PAYMENT_SEND_INTENT
+✅ Correct: "Give everyone 3$" -> PAYMENT_SEND_INTENT
+✅ Correct: "Send me 3$" -> PAYMENT_REQUEST_INTENT
 
-2.Do not generate long-term or delayed intent. Only immediate or short-term intent is valid.
+2. Do not generate long-term or delayed intent. Only immediate or short-term intent is valid.
 ❌ Wrong: “I’ll pay you enough on next year.”
 ✅ Correct: “I'll pay you tomorrow”
 
@@ -36,16 +38,18 @@ Generate examples that show different types of payment intentions in chat messag
 ## Output Requirements
    - Each example must be unique — no repeated bigrams or patterns.
    - May include cryptographic/payment system details (msats, malformed invoices, fee caps, route hints).
+   - JSON output format: {{ "msg": "mesasge", "label": "payment_intent" }}
+   - valid labels: payment_request, payment_intent, open_intent
+   - English only content.
 
    **CRITICAL: EQUAL DISTRIBUTION REQUIREMENT**
    - YOU MUST generate EXACTLY THE SAME NUMBER of examples for each label
-   - All three labels (PAYMENT_REQUEST_INTENT, PAYMENT_SEND_INTENT, SMART_PAYMENT_SYSTEM_COMMAND) must have EQUAL counts
-   - If generating 30 examples total → 10 per label
-   - If generating 90 examples total → 30 per label
-   - COUNT your examples per label before submitting to ensure perfect balance
-   - DO NOT favor any label over others - strict equality required
+   - If generating 30 examples total → 10 payment_request, 10 payment_intent, 10 open_intent
+   - If generating 90 examples total → 30 payment_request, 30 payment_intent, 30 open_intent
+   - COUNT your examples before submitting to ensure perfect balance
+   - DO NOT favor any label over others
 
-Simulate following persona for typing the message
+Simulate following persona for each message
 
 ## Personas
 {personas}

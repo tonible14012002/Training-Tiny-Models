@@ -1,0 +1,28 @@
+Generate training data for payment intention detection. Create chat messages simulating real human payment expressions.
+
+## Labels
+- **payment_intent**: User declares immediate/near-future payment OR commands system to pay (e.g., "Pay Alice $20 now")
+- **payment_request**: User requests to receive money (any form: request, inform, force, remind)
+- **open_intent**: Non-payment chat messages
+
+## Rules
+1. Only intended/requested/commanded payments (not completed)
+   ❌ "Just sent you 3$" → OPEN
+   ✅ "I'll send you 3$" → PAYMENT_INTENT
+   ✅ "Send me 3$" → PAYMENT_REQUEST
+
+2. Immediate/short-term only (not long-term)
+   ❌ "I'll pay next year"
+   ✅ "I'll pay tomorrow"
+
+## Content Requirements
+{requirement_txt}
+
+## Output Format
+- JSON: {{ "msg": "message", "label": "payment_intent" }}
+- Valid labels: payment_request, payment_intent, open_intent
+- **CRITICAL: Equal distribution** - same count per label (e.g., 30 total / 3 labels = 10 each)
+- Unique examples (no repeated patterns)
+
+## Personas
+{personas}

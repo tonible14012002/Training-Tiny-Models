@@ -1,9 +1,12 @@
 import logging
-from typing import List, Dict, Set, Optional
+from typing import List, Dict, Optional, Type, Union
 from datasets import Dataset
+from pathlib import Path
+import json
 
 from app.core.services.trainer.trainer import TrainerService
 from app.core.services.data_manager.data_manager import DataManager
+from app.core.schemas.workflow import Sample, BaseLabelConfig
 from app.core.schemas.analysis import (
     EvaluationResult,
     OverallMetrics,
@@ -12,37 +15,76 @@ from app.core.schemas.analysis import (
     Prediction,
     ErrorBucket,
     OpenIntentAnalysis,
-    MisclassifiedOpenIntent
+    MisclassifiedOpenIntent,
+    ErrorCase,
+    ErrorsByLabel
 )
-from app.core.schemas.workflow import Sample
 from src.payment_classifier.inference.adb_inference import ADBModelInference
+from src.payment_classifier.inference.prob_inference import ProbModelInference
+from src.payment_classifier.inference.base import BaseInferencer
 
 logger = logging.getLogger(__name__)
 
 class ModelAnalyzer:
     '''
-    Analyze and provide insights on machine learning models using ADB inference.
+    Analyze and provide insights on machine learning models using various inference methods.
     '''
 
-    def __init__(self, trainer_service: TrainerService, data_manager: DataManager):
+    def __init__(self, trainer_service: TrainerService, data_manager: DataManager, label_config: Type[BaseLabelConfig]):
         self.trainer_service = trainer_service
         self.data_manager = data_manager
-        self.adb_inferencer: Optional[ADBModelInference] = None
+        self.label_config = label_config
+        self.inferencer: Optional[BaseInferencer] = None
 
-    def load_model(self, checkpoint_path: str) -> None:
-        """Load the ADB model from checkpoint path"""
+    def set_inferencer(self, inferencer: BaseInferencer) -> None:
+        """Set the inferencer to use for model analysis"""
+        self.inferencer = inferencer
+
+    def load_model(self, checkpoint_path: str, inferencer: Optional[BaseInferencer] = None) -> None:
+        """Load the model from checkpoint path with provided inferencer or detect inference type"""
         try:
-            self.adb_inferencer = ADBModelInference(peft_path=checkpoint_path)
-            logger.info(f"Loaded ADB model from {checkpoint_path}")
+            if inferencer is not None:
+                self.inferencer = inferencer
+                logger.info(f"Using provided inferencer for {checkpoint_path}")
+            else:
+                # Fallback to old detection logic for backward compatibility
+                inference_type = self._detect_inference_type(checkpoint_path)
+
+                if inference_type == "prob":
+                    self.inferencer = ProbModelInference(peft_path=checkpoint_path, label_config=self.label_config)
+                    logger.info(f"Loaded probability-based model from {checkpoint_path}")
+                else:
+                    self.inferencer = ADBModelInference(peft_path=checkpoint_path, label_config=self.label_config)
+                    logger.info(f"Loaded ADB model from {checkpoint_path}")
         except Exception as e:
             logger.error(f"Failed to load model from {checkpoint_path}: {e}")
             raise
+
+    def _detect_inference_type(self, checkpoint_path: str) -> str:
+        """Detect inference type from checkpoint metadata, fallback to ADB if not found"""
+        config_file = Path(checkpoint_path) / "inference_config.json"
+
+        if config_file.exists():
+            try:
+                with open(config_file, 'r') as f:
+                    config = json.load(f)
+                return config.get("inference_type", "adb")
+            except (json.JSONDecodeError, KeyError):
+                logger.warning(f"Could not read inference config from {config_file}, defaulting to ADB")
+
+        # Fallback: check if ADB data exists
+        adb_file = Path(checkpoint_path) / "adb_data.json"
+        if adb_file.exists():
+            return "adb"
+
+        # Default to probability-based for backward compatibility
+        return "prob"
 
     def analyze_model(
         self,
         evaluation_dataset: Dataset,
         open_intent_samples: Optional[List[str]] = None,
-        include_test_cases: bool = False
+        include_test_cases: bool = False,
     ) -> EvaluationResult:
         """
         Comprehensive analysis of the trained model using ADB inference.
@@ -51,62 +93,76 @@ class ModelAnalyzer:
             evaluation_dataset: Dataset with 'msg' and 'label' columns
             open_intent_samples: List of open intent samples to test OOD detection
             include_test_cases: Whether to include individual test case results
-
         Returns:
             EvaluationResult with comprehensive metrics
         """
-        if self.adb_inferencer is None:
+        if self.inferencer is None:
             raise ValueError("Model not loaded. Call load_model() first.")
 
         logger.info(f"Analyzing model on {len(evaluation_dataset)} evaluation samples")
-
-        # Analyze known intents using ADB evaluation
-        adb_results = self.adb_inferencer.evaluate_with_adb(evaluation_dataset)
+        logger.info(f"Using {len(open_intent_samples)} unknown intent samples")
+        eval_results = self.inferencer.evaluate(evaluation_dataset, open_intent_samples)
 
         # Convert to our schema format
-        overall_metrics = OverallMetrics(**adb_results["overall"])
+        overall_metrics = OverallMetrics(**eval_results["overall"])
 
         per_label_metrics = {}
-        for label, metrics in adb_results["per_label"].items():
+        for label, metrics in eval_results["per_label"].items():
             per_label_metrics[label] = LabelMetrics(**metrics)
 
         # Create test cases if requested
         test_cases = None
         if include_test_cases:
-            test_cases = self._create_test_cases(evaluation_dataset, adb_results)
+            test_cases = self._create_test_cases(evaluation_dataset, eval_results)
 
-        # Analyze open intent samples if provided
+        # Group errors by label for convenience (including unknown misclassified samples)
+        errors_by_label = self._group_errors_by_label(
+            evaluation_dataset=evaluation_dataset,
+            open_intent_samples=open_intent_samples
+        )
+
+        # Analyze open intent samples if provided (only if not using comprehensive evaluation)
         open_intent_analysis = None
         if open_intent_samples:
-            open_intent_results = self._analyze_open_intents(open_intent_samples)
-            logger.info(f"Open intent analysis: {len(open_intent_samples)} samples, "
-                       f"{open_intent_results['detected_as_unknown']} detected as unknown "
-                       f"({open_intent_results['unknown_rate']:.2%})")
+            # Extract open intent analysis from comprehensive results
+            if "unknown_analysis" in eval_results:
+                unknown_analysis = eval_results["unknown_analysis"]
+                # Handle different inference types - ADB has detailed unknown analysis, prob-based has simplified
+                if isinstance(unknown_analysis, dict) and "true_positives" in unknown_analysis:
+                    # ADB inference with detailed unknown analysis
+                    open_intent_analysis = OpenIntentAnalysis(
+                        total_samples=len(open_intent_samples),
+                        detected_as_unknown=unknown_analysis["true_positives"],
+                        unknown_rate=unknown_analysis["unknown_detection_rate"],
+                        false_positive_rate=unknown_analysis["false_positive_rate"],
+                        misclassified=[]  # Could be enhanced to extract from comprehensive results if needed
+                    )
+                elif isinstance(unknown_analysis, dict) and "note" in unknown_analysis:
+                    # Probability-based inference - no real unknown detection
+                    open_intent_analysis = OpenIntentAnalysis(
+                        total_samples=len(open_intent_samples),
+                        detected_as_unknown=0,  # Prob-based can't detect unknowns
+                        unknown_rate=0.0,
+                        false_positive_rate=1.0,  # All unknowns are misclassified in prob-based
+                        misclassified=[]
+                    )
 
-            # Convert to schema format
-            misclassified = [
-                MisclassifiedOpenIntent(**item) for item in open_intent_results["misclassified"]
-            ]
-
-            open_intent_analysis = OpenIntentAnalysis(
-                total_samples=open_intent_results["total_samples"],
-                detected_as_unknown=open_intent_results["detected_as_unknown"],
-                unknown_rate=open_intent_results["unknown_rate"],
-                false_positive_rate=open_intent_results["false_positive_rate"],
-                misclassified=misclassified
-            )
+        # Pass through unknown_analysis if using comprehensive evaluation
+        unknown_analysis = eval_results.get("unknown_analysis") 
 
         result = EvaluationResult(
             overall=overall_metrics,
             per_label=per_label_metrics,
-            adb_info=adb_results.get("adb_info"),
+            adb_info=eval_results.get("adb_info"),
             test_cases=test_cases,
-            open_intent_analysis=open_intent_analysis
+            open_intent_analysis=open_intent_analysis,
+            unknown_analysis=unknown_analysis,
+            errors_by_label=errors_by_label
         )
 
         return result
 
-    def _create_test_cases(self, evaluation_dataset: Dataset, adb_results: dict) -> List[TestCase]:
+    def _create_test_cases(self, evaluation_dataset: Dataset, eval_results: dict) -> List[TestCase]:
         """Create test cases from evaluation results"""
         test_cases = []
 
@@ -117,14 +173,14 @@ class ModelAnalyzer:
         for i in range(0, len(evaluation_dataset), batch_size):
             batch = evaluation_dataset[i:i+batch_size]
             texts = batch['msg']
-            predictions = self.adb_inferencer.predict_with_adb(texts)
+            predictions = self.inferencer.predict(texts)
             all_predictions.extend(predictions)
 
         # Create test case objects
         for i, (sample_data, pred_data) in enumerate(zip(evaluation_dataset, all_predictions)):
             sample = Sample(
                 msg=sample_data['msg'],
-                label=self.adb_inferencer.id2label[sample_data['label']]
+                label=self.inferencer.id2label[sample_data['label']]
             )
 
             prediction = Prediction(
@@ -136,19 +192,137 @@ class ModelAnalyzer:
 
             test_case = TestCase(
                 input=sample,
-                true_label=self.adb_inferencer.id2label[sample_data['label']],
+                true_label=self.inferencer.id2label[sample_data['label']],
                 prediction=prediction
             )
             test_cases.append(test_case)
 
         return test_cases
 
-    def _analyze_open_intents(self, open_intent_samples: List[str]) -> Dict:
-        """Analyze open intent detection capability"""
-        if self.adb_inferencer is None:
+    def _group_errors_by_label(
+        self,
+        evaluation_dataset: Dataset,
+        open_intent_samples: Optional[List[str]] = None
+    ) -> Dict[str, ErrorsByLabel]:
+        """Group false positives and false negatives by label, including unknown misclassified samples"""
+        if self.inferencer is None:
             raise ValueError("Model not loaded")
 
-        predictions = self.adb_inferencer.predict_with_adb(open_intent_samples)
+        # Get all labels in the dataset
+        all_labels = set()
+        for sample in evaluation_dataset:
+            true_label = self.inferencer.id2label[sample['label']]
+            all_labels.add(true_label)
+
+        # Initialize error groups for each label
+        errors_by_label = {}
+        for label in all_labels:
+            errors_by_label[label] = ErrorsByLabel(false_positives=[], false_negatives=[])
+
+        # Always include "Unknown" if it exists in the model
+        if "Unknown" in self.inferencer.label2id:
+            errors_by_label["Unknown"] = ErrorsByLabel(false_positives=[], false_negatives=[])
+
+        # Process evaluation dataset (known intents)
+        batch_size = 32
+        all_predictions = []
+
+        for i in range(0, len(evaluation_dataset), batch_size):
+            batch = evaluation_dataset[i:i+batch_size]
+            texts = batch['msg']
+            predictions = self.inferencer.predict(texts)
+            all_predictions.extend(predictions)
+
+        # Group errors from evaluation dataset
+        for i, (sample_data, pred_data) in enumerate(zip(evaluation_dataset, all_predictions)):
+            true_label = self.inferencer.id2label[sample_data['label']]
+            predicted_label = pred_data["label"]
+
+            # Skip correct predictions
+            if true_label == predicted_label:
+                continue
+
+            # Create error case
+            error_case = ErrorCase(
+                input=Sample(
+                    msg=sample_data['msg'],
+                    label=true_label
+                ),
+                true_label=true_label,
+                predicted_label=predicted_label,
+                confidence=pred_data["prob"],
+                distance=pred_data.get("dis")
+            )
+
+            # Add as false negative for true label
+            if true_label in errors_by_label:
+                errors_by_label[true_label].false_negatives.append(error_case)
+
+            # Add as false positive for predicted label
+            if predicted_label in errors_by_label:
+                errors_by_label[predicted_label].false_positives.append(error_case)
+
+        # Process open intent samples if provided
+        if open_intent_samples and "Unknown" in errors_by_label:
+            open_predictions = self.inferencer.predict(open_intent_samples)
+
+            for i, pred_data in enumerate(open_predictions):
+                predicted_label = pred_data["label"]
+
+                # Skip correct predictions (should be "Unknown")
+                if predicted_label == "Unknown":
+                    continue
+
+                # Create error case for misclassified unknown sample
+                error_case = ErrorCase(
+                    input=Sample(
+                        msg=open_intent_samples[i],
+                        label="Unknown"  # True label for open intent samples
+                    ),
+                    true_label="Unknown",
+                    predicted_label=predicted_label,
+                    confidence=pred_data["prob"],
+                    distance=pred_data.get("dis")
+                )
+
+                # Add as false negative for Unknown (should have been Unknown but wasn't)
+                errors_by_label["Unknown"].false_negatives.append(error_case)
+
+                # Add as false positive for predicted label (was predicted as this label but shouldn't be)
+                if predicted_label in errors_by_label:
+                    errors_by_label[predicted_label].false_positives.append(error_case)
+
+        return errors_by_label
+
+    def get_error_patterns_from_result(self, errors_by_label: Dict[str, ErrorsByLabel]) -> Dict[str, List[ErrorCase]]:
+        """
+        Extract error patterns from existing errors_by_label result.
+
+        Args:
+            errors_by_label: Result from _group_errors_by_label()
+
+        Returns:
+            Dict where keys are "expected_label->predicted_label" and values are lists of ErrorCase
+        """
+        error_patterns = {}
+
+        # Extract error cases from errors_by_label
+        for _, label_errors in errors_by_label.items():
+            # Process false negatives (cases that should be this label but weren't)
+            for error_case in label_errors.false_negatives:
+                pattern_key = f"{error_case.true_label}->{error_case.predicted_label}"
+                if pattern_key not in error_patterns:
+                    error_patterns[pattern_key] = []
+                error_patterns[pattern_key].append(error_case)
+
+        return error_patterns
+
+    def _analyze_open_intents(self, open_intent_samples: List[str]) -> Dict:
+        """Analyze open intent detection capability"""
+        if self.inferencer is None:
+            raise ValueError("Model not loaded")
+
+        predictions = self.inferencer.predict(open_intent_samples)
 
         detected_as_unknown = sum(1 for pred in predictions if pred["label"] == "Unknown")
         total_samples = len(open_intent_samples)
@@ -165,7 +339,7 @@ class ModelAnalyzer:
                     "distance": pred.get("dis", 0.0)
                 })
 
-        return {
+        result = {
             "total_samples": total_samples,
             "detected_as_unknown": detected_as_unknown,
             "unknown_rate": unknown_rate,
@@ -173,146 +347,11 @@ class ModelAnalyzer:
             "false_positive_rate": (total_samples - detected_as_unknown) / total_samples if total_samples > 0 else 0.0
         }
 
-    def analyze_errors(self, evaluation_result: EvaluationResult) -> List[ErrorBucket]:
-        """
-        Analyze errors and categorize them into error buckets.
+        # Add logging to track the data
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Open intent analysis results: {total_samples} total, {detected_as_unknown} detected as unknown, {len(misclassified)} misclassified")
+        if misclassified:
+            logger.info(f"Sample misclassified items: {misclassified[:2]}")
 
-        Args:
-            evaluation_result: Result from analyze_model()
-
-        Returns:
-            List of relevant error buckets based on the analysis
-        """
-        if not evaluation_result.test_cases:
-            logger.warning("No test cases available for error analysis. Run analyze_model with include_test_cases=True")
-            return []
-
-        # Analyze error patterns
-        error_patterns = self._categorize_errors(evaluation_result.test_cases)
-
-        # Map to error buckets
-        relevant_buckets = self._map_to_error_buckets(error_patterns, evaluation_result.overall)
-
-        return relevant_buckets
-
-    def _categorize_errors(self, test_cases: List[TestCase]) -> Dict:
-        """Categorize errors based on test case analysis"""
-        patterns = {
-            "keyword_reliance": 0,
-            "simple_intent_miss": 0,
-            "complex_structure": 0,
-            "ambiguous_cases": 0,
-            "focus_issues": 0
-        }
-
-        total_errors = 0
-
-        for test_case in test_cases:
-            if test_case.prediction and test_case.prediction.label != test_case.true_label:
-                total_errors += 1
-
-                # Simple heuristics for error categorization
-                msg = test_case.input.msg.lower()
-                msg_len = len(msg.split())
-
-                # Simple intent miss - short, clear messages
-                if msg_len <= 5 and any(word in msg for word in ['pay', 'send', 'request', 'money']):
-                    patterns["simple_intent_miss"] += 1
-
-                # Complex structure - long sentences with multiple clauses
-                elif msg_len > 10 or ',' in msg or 'if' in msg or 'when' in msg:
-                    patterns["complex_structure"] += 1
-
-                # Ambiguous cases - could be multiple intents
-                elif any(word in msg for word in ['maybe', 'could', 'might', 'possibly']):
-                    patterns["ambiguous_cases"] += 1
-
-                # Default to keyword reliance or focus issues
-                else:
-                    if test_case.prediction.prob > 0.8:  # High confidence wrong answer
-                        patterns["keyword_reliance"] += 1
-                    else:
-                        patterns["focus_issues"] += 1
-
-        patterns["total_errors"] = total_errors
-        return patterns
-
-    def _map_to_error_buckets(self, patterns: Dict, overall_metrics: OverallMetrics) -> List[ErrorBucket]:
-        """Map error patterns to relevant error buckets"""
-        # Import the example buckets
-        from app.core.schemas.analysis import EXAMPLE_ERROR_BUCKETS
-
-        relevant_buckets = []
-
-        # Add buckets based on error patterns
-        if patterns["simple_intent_miss"] > patterns["total_errors"] * 0.2:  # >20% of errors
-            relevant_buckets.append(next(bucket for bucket in EXAMPLE_ERROR_BUCKETS
-                                       if bucket.name == "Miss detecting simple intent"))
-
-        if patterns["keyword_reliance"] > patterns["total_errors"] * 0.3:  # >30% of errors
-            relevant_buckets.append(next(bucket for bucket in EXAMPLE_ERROR_BUCKETS
-                                       if bucket.name == "Over reliance on keywords"))
-
-        if patterns["complex_structure"] > patterns["total_errors"] * 0.2:  # >20% of errors
-            relevant_buckets.append(next(bucket for bucket in EXAMPLE_ERROR_BUCKETS
-                                       if bucket.name == "Complex sentence structure"))
-
-        if patterns["focus_issues"] > patterns["total_errors"] * 0.15:  # >15% of errors
-            relevant_buckets.append(next(bucket for bucket in EXAMPLE_ERROR_BUCKETS
-                                       if bucket.name == "Miss focus on important word"))
-
-        if overall_metrics.accuracy < 0.7:  # Low overall accuracy
-            relevant_buckets.append(next(bucket for bucket in EXAMPLE_ERROR_BUCKETS
-                                       if bucket.name == "Ambiguous intent"))
-
-        return relevant_buckets
-
-    def generate_analysis_report(self, evaluation_result: EvaluationResult) -> str:
-        """Generate a comprehensive analysis report"""
-        report = []
-
-        # Overall metrics
-        overall = evaluation_result.overall
-        report.append("=== MODEL ANALYSIS REPORT ===\n")
-        report.append(f"Overall Accuracy: {overall.accuracy:.2%}")
-        report.append(f"Coverage: {overall.coverage:.2%}")
-        report.append(f"Unknown Rate: {overall.unknown_rate:.2%}")
-        report.append(f"Macro F1-Score: {overall.macro_f1:.3f}")
-        report.append(f"Total Samples: {overall.total_samples}")
-        report.append("")
-
-        # Per-label metrics
-        report.append("=== PER-LABEL METRICS ===")
-        for label, metrics in evaluation_result.per_label.items():
-            report.append(f"\n{label.upper()}:")
-            report.append(f"  Accuracy: {metrics.accuracy:.2%}")
-            report.append(f"  Precision: {metrics.precision:.3f}")
-            report.append(f"  Recall: {metrics.recall:.3f}")
-            report.append(f"  F1-Score: {metrics.f1_score:.3f}")
-            report.append(f"  Coverage: {metrics.coverage:.2%}")
-            report.append(f"  Samples: {metrics.samples}")
-
-        # Open intent analysis
-        if evaluation_result.open_intent_analysis:
-            oia = evaluation_result.open_intent_analysis
-            report.append("\n=== OPEN INTENT ANALYSIS ===")
-            report.append(f"Total Open Intent Samples: {oia.total_samples}")
-            report.append(f"Detected as Unknown: {oia.detected_as_unknown}")
-            report.append(f"Unknown Detection Rate: {oia.unknown_rate:.2%}")
-            report.append(f"False Positive Rate: {oia.false_positive_rate:.2%}")
-
-            if oia.misclassified:
-                report.append(f"\nMisclassified Open Intents ({len(oia.misclassified)}):")
-                for i, misc in enumerate(oia.misclassified[:5]):  # Show first 5
-                    report.append(f"  {i+1}. '{misc.text}' -> {misc.predicted_as} (conf: {misc.confidence:.3f})")
-                if len(oia.misclassified) > 5:
-                    report.append(f"  ... and {len(oia.misclassified) - 5} more")
-
-        # ADB info
-        if evaluation_result.adb_info and "radii" in evaluation_result.adb_info:
-            report.append("\n=== ADB RADII ===")
-            for label_id, radius in evaluation_result.adb_info["radii"].items():
-                label_name = evaluation_result.adb_info["labels"][int(label_id)]
-                report.append(f"{label_name}: {radius:.4f}")
-
-        return "\n".join(report)
+        return result

@@ -1,0 +1,36 @@
+Generate challenging evaluation data for payment intention detection. Create diverse, edge-case messages that test boundary recognition.
+
+## Labels
+- **payment_request**: Clear request to receive money
+- **payment_intent**: Clear intent to send money OR command to execute payment
+- **open_intent**: Everything else (including payment discussions without clear intent)
+
+## Key Notes
+1. Past tense payments is open intent: "sent you $5" → open_intent
+2. No long-term: "next year" → open_intent
+3. **If ambiguous even for humans without context → open_intent**
+
+## Examples
+**payment_request**: "spot me for lunch?", "need $20 for gas"
+**payment_intent**: "I'll cover dinner", "sending you rent money", "pay John $50"
+**open_intent**: "thanks for paying last time", "that's expensive", "same as usual?" (ambiguous)
+
+## Content Diversity
+- **Amounts**: specific ($20), vague (some cash), none
+- **Methods**: cash, Venmo, crypto, generic, none
+- **Styles**: formal, casual, slang, technical, ...
+- **Difficulty**: simple, hard, long-tail message
+
+## Output
+JSON format: {{"msg": "text", "label": "payment_request"}}
+
+**CRITICAL: EQUAL DISTRIBUTION REQUIREMENT**
+- YOU MUST generate EXACTLY THE SAME NUMBER of examples for each label
+- All three labels (payment_request, payment_intent, open_intent) must have EQUAL counts
+- If generating 30 examples total → 10 payment_request, 10 payment_intent, 10 open_intent
+- If generating 90 examples total → 30 payment_request, 30 payment_intent, 30 open_intent
+- COUNT your examples per label before submitting to ensure perfect balance
+- DO NOT favor any label over others - strict equality required
+
+## Personas
+{personas}

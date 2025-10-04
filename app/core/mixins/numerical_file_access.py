@@ -120,6 +120,23 @@ class NumericalFileAccessMixin:
             return self._get_item_path(number)
         return None
 
+    def get_item_path_by_id(self, checkpoint_id: str) -> Optional[Path]:
+        """
+        Get the path to a specific checkpoint by ID (supports both integer and sub-versions).
+
+        Args:
+            checkpoint_id: Checkpoint identifier (e.g., "1", "2", "1.1", "2.3")
+
+        Returns:
+            Optional[Path]: Path to checkpoint if it exists, None otherwise
+        """
+        base_path = Path(self.base_directory)
+        checkpoint_path = base_path / checkpoint_id
+
+        if checkpoint_path.exists():
+            return checkpoint_path
+        return None
+
     def list_all_items(self) -> List[int]:
         """
         List all available numerical items.
@@ -137,3 +154,106 @@ class NumericalFileAccessMixin:
             int: Number of items in the directory
         """
         return len(self._get_all_numerical_items())
+
+    def _get_latest_sub_version(self, base_number: int) -> Optional[str]:
+        """
+        Get the latest sub-version for a given base numerical item.
+
+        For example, if base_number=10 and sub-versions 10.1, 10.2, 10.3 exist,
+        this returns "10.3".
+
+        Args:
+            base_number: The base item number
+
+        Returns:
+            The latest sub-version name (e.g., "10.3") or None if no sub-versions exist
+        """
+        base_path = Path(self.base_directory)
+
+        if not base_path.exists():
+            return None
+
+        # Find all sub-versions matching pattern {base_number}.{version}
+        sub_versions = []
+
+        for item in base_path.iterdir():
+            if item.is_dir() and item.name.startswith(f"{base_number}."):
+                try:
+                    # Extract version number after the dot
+                    parts = item.name.split('.')
+                    if len(parts) == 2 and parts[0] == str(base_number):
+                        version = int(parts[1])
+                        sub_versions.append((version, item.name))
+                except (ValueError, IndexError):
+                    continue
+
+        if not sub_versions:
+            return None
+
+        # Sort by version and return the latest
+        sub_versions.sort(key=lambda x: x[0], reverse=True)
+        return sub_versions[0][1]
+
+    def _get_next_sub_version_paths(self, base_number: int) -> tuple[str, str]:
+        """
+        Determine the paths for continual training with sub-versioning.
+
+        Returns the path to load from and the path to save to. If no sub-versions
+        exist, loads from base and saves to base.1. Otherwise, loads from latest
+        sub-version and saves to next sub-version.
+
+        Args:
+            base_number: The base item number
+
+        Returns:
+            Tuple of (path_to_load_from, path_to_save_to)
+        """
+        base_path = Path(self.base_directory)
+        latest_sub = self._get_latest_sub_version(base_number)
+
+        if latest_sub is None:
+            # No sub-versions exist, start from base item and create .1
+            load_from = str(base_path / str(base_number))
+            save_to = str(base_path / f"{base_number}.1")
+        else:
+            # Load from latest sub-version and increment version
+            parts = latest_sub.split('.')
+            version = int(parts[1])
+            next_version = version + 1
+            load_from = str(base_path / latest_sub)
+            save_to = str(base_path / f"{base_number}.{next_version}")
+
+        return load_from, save_to
+
+    def get_next_sub_version_from_id(self, checkpoint_id: str) -> tuple[str, str]:
+        """
+        Get the next sub-version paths based on a given checkpoint ID.
+
+        This allows continuing from any checkpoint (base or sub-version).
+        - From "10" → loads "10", saves to "10.1"
+        - From "10.1" → loads "10.1", saves to "10.2"
+        - From "10.5" → loads "10.5", saves to "10.6"
+
+        Args:
+            checkpoint_id: The checkpoint to continue from (e.g., "10", "10.1")
+
+        Returns:
+            Tuple of (path_to_load_from, path_to_save_to)
+        """
+        base_path = Path(self.base_directory)
+        load_from = str(base_path / checkpoint_id)
+
+        # Parse checkpoint_id to determine next version
+        parts = checkpoint_id.split('.')
+
+        if len(parts) == 1:
+            # Base checkpoint (e.g., "10") → create "10.1"
+            save_to = str(base_path / f"{checkpoint_id}.1")
+        else:
+            # Sub-version (e.g., "10.1") → create next sub-version "10.2"
+            base_num = parts[0]
+            current_version = int(parts[1])
+            next_version = current_version + 1
+            save_to = str(base_path / f"{base_num}.{next_version}")
+
+        return load_from, save_to

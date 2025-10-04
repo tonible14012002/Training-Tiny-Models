@@ -64,13 +64,15 @@ class DeduplicationMixin:
         logger.debug(f"Deduplicated {len(data)} samples to {len(deduped)} unique samples")
         return list(deduped.values())
 
-    async def filter_against_existing(self, new_data: List[Sample], existing_data: List[Sample]) -> List[Sample]:
+    async def filter_against_existing(self, new_data: List[Sample], existing_data: List[Sample], window_size: int = 1000) -> List[Sample]:
         """
         Filter new data against existing data to avoid duplicates.
+        Only compares samples within the same label and uses a sliding window for better performance.
 
         Args:
             new_data: New samples to filter
             existing_data: Existing samples to compare against
+            window_size: Maximum number of recent samples per label to compare against (default: 1000)
 
         Returns:
             List of filtered samples that are sufficiently different from existing data
@@ -78,12 +80,28 @@ class DeduplicationMixin:
         if not existing_data:
             return new_data
 
+        # Group existing data by label for efficient lookup
+        existing_by_label = {}
+        for item in existing_data:
+            label = item.label
+            if label not in existing_by_label:
+                existing_by_label[label] = []
+            existing_by_label[label].append(item)
+
+        # Apply sliding window to each label group (keep only recent samples)
+        for label in existing_by_label:
+            if len(existing_by_label[label]) > window_size:
+                existing_by_label[label] = existing_by_label[label][-window_size:]
+
         filtered = []
 
         for new_item in new_data:
             is_unique = True
 
-            for existing_item in existing_data:
+            # Only compare against recent existing items with the same label
+            same_label_existing = existing_by_label.get(new_item.label, [])
+
+            for existing_item in same_label_existing:
                 rouge = await EvaluationUtils.score_rouge(
                     ref=new_item.msg,
                     pred=existing_item.msg,
@@ -99,7 +117,12 @@ class DeduplicationMixin:
             if is_unique:
                 filtered.append(new_item)
 
+        total_comparisons_before = len(new_data) * len(existing_data) if existing_data else 0
+        total_comparisons_after = sum(len(existing_by_label.get(item.label, [])) for item in new_data)
+
         logger.debug(f"Filtered {len(new_data)} new samples to {len(filtered)} unique samples")
+        logger.debug(f"Label-based + sliding window filtering reduced comparisons from {total_comparisons_before} to {total_comparisons_after}")
+        logger.debug(f"Window size: {window_size} per label")
         return filtered
 
     async def deduplicate_and_filter(self, new_data: List[Sample], existing_data: List[Sample] = None) -> List[Sample]:

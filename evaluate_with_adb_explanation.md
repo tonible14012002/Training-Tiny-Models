@@ -2,12 +2,12 @@
 
 ## Overview
 
-The `evaluate_with_adb` method in `ADBModelInference` class performs comprehensive evaluation of a fine-tuned model using Angular Distance-Based (ADB) classification on a labeled dataset. This method validates model performance by comparing predictions against ground truth labels and calculating various classification metrics.
+The `evaluate` method in `ADBModelInference` class performs comprehensive evaluation of a fine-tuned model using Angular Distance-Based (ADB) classification on a labeled dataset. This method validates model performance by comparing predictions against ground truth labels and calculating various classification metrics.
 
 ## Method Signature
 
 ```python
-def evaluate_with_adb(self, data: Dataset) -> dict:
+def evaluate(self, data: Dataset) -> dict:
 ```
 
 **Input:** `data` - A HuggingFace Dataset containing messages (`msg`) and ground truth labels (`label`)
@@ -43,7 +43,7 @@ for i in range(0, len(data), batch_size):
     batch = data[i:i+batch_size]
     texts = batch['msg']
     true_labels = batch['label']
-    predictions = self.predict_with_adb(texts)
+    predictions = self.predict(texts)
     all_predictions.extend(predictions)
     all_true_labels.extend(true_labels)
 ```
@@ -51,7 +51,7 @@ for i in range(0, len(data), batch_size):
 **Purpose:** Process dataset in chunks, collecting all predictions and true labels
 **Why Correct:**
 - Uses proper indexing to avoid data overlap
-- Leverages existing `predict_with_adb` method for consistency
+- Leverages existing `predict` method for consistency
 - Accumulates results for comprehensive evaluation
 
 ### 4. Metrics Initialization (Lines 237-245)
@@ -175,11 +175,11 @@ return {
 3. **Comprehensive Metrics:** Covers accuracy, precision, recall, F1, coverage
 4. **ADB-Specific Insights:** Tracks unknown predictions and boundary effectiveness
 5. **Per-Label Analysis:** Detailed breakdown for each classification class
-6. **Consistent API:** Leverages existing `predict_with_adb` method
+6. **Consistent API:** Leverages existing `predict` method
 
 ## Validation Conclusion
 
-The `evaluate_with_adb` method is **correctly implemented** and follows classification evaluation best practices:
+The `evaluate` method is **correctly implemented** and follows classification evaluation best practices:
 
 - ✅ Proper TP/FP/FN counting logic
 - ✅ Standard metric formulations

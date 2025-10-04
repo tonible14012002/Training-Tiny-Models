@@ -1,0 +1,2215 @@
+{
+    "overall_metrics": {
+      "accuracy": 0.5734126984126984,
+      "unknown_rate": 0,
+      "macro_precision": 0.7150814730496005,
+      "macro_recall": 0.5305827338794544,
+      "macro_f1": 0.4462261550895632,
+      "total_samples": 504,
+      "correct_predictions": 289,
+      "unknown_predictions": 0
+    },
+    "per_label_metrics": {
+      "payment_intent": {
+        "accuracy": 0.7817460317460317,
+        "precision": 0.601593625498008,
+        "recall": 0.937888198757764,
+        "f1_score": 0.7330097087378641,
+        "samples": 161,
+        "true_positives": 151,
+        "false_positives": 100,
+        "true_negatives": 243,
+        "false_negatives": 10
+      },
+      "payment_request": {
+        "accuracy": 0.7420634920634921,
+        "precision": 1,
+        "recall": 0.007633587786259542,
+        "f1_score": 0.015151515151515152,
+        "samples": 131,
+        "true_positives": 1,
+        "false_positives": 0,
+        "true_negatives": 373,
+        "false_negatives": 130
+      },
+      "open_intent": {
+        "accuracy": 0.623015873015873,
+        "precision": 0.5436507936507936,
+        "recall": 0.6462264150943396,
+        "f1_score": 0.5905172413793103,
+        "samples": 212,
+        "true_positives": 137,
+        "false_positives": 115,
+        "true_negatives": 177,
+        "false_negatives": 75
+      }
+    },
+    "open_intent_analysis": {
+      "total_samples": 370,
+      "detected_as_unknown": 0,
+      "unknown_rate": 0,
+      "false_positive_rate": 1,
+      "misclassified": []
+    },
+    "adb_info": null,
+    "error_patterns": {
+      "payment_intent->open_intent": [
+        {
+          "input": {
+            "msg": "Sending you the money right now, check your app.",
+            "label": "payment_intent"
+          },
+          "true_label": "payment_intent",
+          "predicted_label": "open_intent",
+          "confidence": 0.36676424741744995,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Just dropped some crypto in your wallet for the gear.",
+            "label": "payment_intent"
+          },
+          "true_label": "payment_intent",
+          "predicted_label": "open_intent",
+          "confidence": 0.3566305339336395,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "I'll pay for the Uber this time, don't worry!",
+            "label": "payment_intent"
+          },
+          "true_label": "payment_intent",
+          "predicted_label": "open_intent",
+          "confidence": 0.3600824773311615,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Transferring the crypto for the rare book as we discussed.",
+            "label": "payment_intent"
+          },
+          "true_label": "payment_intent",
+          "predicted_label": "open_intent",
+          "confidence": 0.4161335527896881,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "I'll send you some cash for the photos later.",
+            "label": "payment_intent"
+          },
+          "true_label": "payment_intent",
+          "predicted_label": "open_intent",
+          "confidence": 0.3661186993122101,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "I'll handle the payment for the nightlight you wanted.",
+            "label": "payment_intent"
+          },
+          "true_label": "payment_intent",
+          "predicted_label": "open_intent",
+          "confidence": 0.34448862075805664,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Processing your reimbursement now, you should get it shortly.",
+            "label": "payment_intent"
+          },
+          "true_label": "payment_intent",
+          "predicted_label": "open_intent",
+          "confidence": 0.3471362292766571,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Just sent the crypto you requested.",
+            "label": "payment_intent"
+          },
+          "true_label": "payment_intent",
+          "predicted_label": "open_intent",
+          "confidence": 0.36602097749710083,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Settling up the bar tab from last night now.",
+            "label": "payment_intent"
+          },
+          "true_label": "payment_intent",
+          "predicted_label": "open_intent",
+          "confidence": 0.37961968779563904,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Your algorithm worked wonders! I'll wire the grant funds by Friday.",
+            "label": "payment_intent"
+          },
+          "true_label": "payment_intent",
+          "predicted_label": "open_intent",
+          "confidence": 0.3627895414829254,
+          "distance": null
+        }
+      ],
+      "payment_request->open_intent": [
+        {
+          "input": {
+            "msg": "Hey, can you spot me for the tickets? I forgot my wallet at the hostel.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.34646913409233093,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you pay for the subscription this month? I’m a bit short.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3663664758205414,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Would you mind paying the photographer upfront? I’ll sort you out later.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3799313008785248,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you lend me some cash for the author signing event?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3580774664878845,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Need $15 for the folklore archive access—can you help?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3727349042892456,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you advance the money for the import data subscription?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.376374214887619,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Could you cover the cost of the new server for now?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.4120745360851288,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Would you be able to pay for the herbal supplements upfront?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3626478612422943,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Mind grabbing the ingredients for the poetry night? I’ll reimburse you.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.37372884154319763,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "When you get the chance, could you send me back the deposit?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3872365653514862,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Do you mind covering the registration fee this time?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.38936567306518555,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you float me $15 until payday?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3646593391895294,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you pay for my share and I’ll get you back?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3530734181404114,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Drop some cash for snacks on your way here?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.34247684478759766,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you reimburse me via PayPal this time?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3570297360420227,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Would you mind sending over your share for the group gift?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.37058699131011963,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Could you cover the cab fare to the airport for me?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3771595358848572,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Is it possible to Venmo me for the pizza later?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.4006376564502716,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Could you cover my part for the yoga retreat this time?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.4083828330039978,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Would you mind lending me 50 euros for the art supplies?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.36113113164901733,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Could you Venmo me for your half of the groceries?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.39109599590301514,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "When you get a chance, can you shoot over that $40?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3455114960670471,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Do you mind covering my share until Friday?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3976602554321289,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Any chance you could PayPal me some cash for the supplies?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.36713406443595886,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you handle the donation for our team?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3703363835811615,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Any chance you could cover my coffee this morning?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.37856635451316833,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you front the cash for the Taekwondo test?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.37570449709892273,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Would you be able to cover the cost of the flowers this time?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3912216126918793,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Could you transfer me the ticket money before Friday?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3714718222618103,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Is it alright if you pay for the museum tickets this time?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.34861689805984497,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Would you mind covering the bakery order today?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.4300553798675537,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Let me know if you need help with the vet bill this month.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3532736003398895,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Could you send me your share for the football tickets?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3629910945892334,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you help me out with the painting supplies for my next project?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.36326661705970764,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Would it be possible for you to front the deposit for the festival venue?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.36618727445602417,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Is it okay if I borrow some crypto to register for the conference?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.38807034492492676,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Could you pitch in for the joint gift to the project manager?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3739469647407532,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Any chance you can help cover my half of the hotel tonight?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.35966068506240845,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you send over $25 for the group lunch when you have a moment?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.349371075630188,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "I’d appreciate it if you could handle the bill for dinner tonight.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.35507574677467346,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "If you can grab the bill this time, I'll get you back next week.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3628389835357666,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "I just realized I left my wallet at home—could you pay for the parking?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.36662885546684265,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Could you send over the crypto for the sculpture now?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.4184643030166626,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Could you cover my share for the group gift?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3875376880168915,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Spare a few coins for my coffee run?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3442777693271637,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you spot me for the Renaissance costume rental?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3747996687889099,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Would you mind picking up the science project kit? I’ll pay you back.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3620080351829529,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Could you handle the upfront cost for the group tour?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.4010487198829651,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Mind chipping in for the community fundraiser?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.36469003558158875,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Is it possible for you to spot me some cash until Friday?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.364097535610199,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Any chance you could help out with the cost of the paint supplies?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3919706344604492,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can someone spot me for the conference fee?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3732283413410187,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you send over your share for utilities this week?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3458859920501709,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Could you cover the entry fee for me?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3776908814907074,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Could you cover the ambulance fuel cost this time?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3896016478538513,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "How about you send me half for the podcast equipment?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.41020986437797546,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Would you mind sending me a little cash for the museum entry?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3826632499694824,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you pay the balance for the dental x-ray today?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.33628585934638977,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you Venmo me for the penetration test expenses?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3486051559448242,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Any chance you could chip in for the gondola tickets this weekend?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.33765164017677307,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Could you help me out with the electricity bill this month?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.38668307662010193,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Would you mind paying for the post-game meal tonight?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3638642728328705,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "I could really use some help covering my prescription this month.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.36185601353645325,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "If you could send me $40 for the groceries, that'd be great.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.34109997749328613,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Let me know if you can cover the cleaning supplies today.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3381522595882416,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you PayPal me for the retro board games order?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.337076336145401,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you transfer the project budget to my account by Friday?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.36278006434440613,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Could you cover the entrance fee for me at the museum tomorrow?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3661867380142212,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Could you send $30 to cover the basket weaving workshop materials?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.37503886222839355,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Could you please pay the league dues for the team this month?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.35281631350517273,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you cover my ticket for the Packers game?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.38752511143684387,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Could you lend me 10,000 CFA for my medication this week?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.35932138562202454,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Mind covering the bill this time at the club?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.4338575601577759,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "If you could just Venmo me what you owe for the concert, that would be great.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3573853373527527,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Could you help me out with some cash for the soccer tournament fee?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.35257771611213684,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Mind lending me a bit for groceries until Thursday?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3695438504219055,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Could you please reimburse me for the Uber ride?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3714360296726227,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you send the payment for the domain name renewal?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3706401586532593,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Is it okay if you grab the groceries and I pay you back later?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3797670006752014,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Would you mind lending me some cash until Friday?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.37739813327789307,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Could you wire me some funds for the equipment rental?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.39335909485816956,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Would you be able to cover my share today?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3908602297306061,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you help out with the booking fee upfront?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3380293548107147,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Could you transfer some money for the team’s lunch order?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.36194169521331787,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Need a hand with the costume deposit for the school play?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.36780494451522827,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you spot me till my scholarship comes through?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.35872694849967957,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Mind spotting me for the cab fare this evening?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3866606652736664,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you send your half for the birthday cake?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3517226576805115,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Hey, can you spot me for coffee till payday?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.36127692461013794,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Could you please pay the rest of the hosting fee by Friday?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.34540942311286926,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Could you please transfer the reimbursement for last month's conference expenses via wire?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.338310569524765,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Could you pay the lighting technician his fee before the show starts?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3621233105659485,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Mind spotting me for coffee? I forgot my wallet at home.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.37262994050979614,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Could you send $50 to my account for the utilities?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3559092879295349,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you please pay the venue deposit today?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.35092440247535706,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you give me some money for lunch?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.36414387822151184,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Could you send me the invoice for last month’s consultation fees?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.35807275772094727,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you cover my lunch today, I forgot my wallet at home?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3772658109664917,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "If you could send some Ether to my wallet, I’ll reimburse you next week.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.37506163120269775,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you pay the gardener this week?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.36239388585090637,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Could you please pay for the field trip now?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3647938072681427,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Just let me know how much I owe for the fresco paint supplies.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.34160324931144714,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Is there a way I can contribute to the classroom library fund?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3649757206439972,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Could you spot me for the legal research database subscription?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3873038589954376,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Перекинь мне на карту деньги за ужин, когда будет удобно.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "open_intent",
+          "confidence": 0.3683255910873413,
+          "distance": null
+        }
+      ],
+      "payment_request->payment_intent": [
+        {
+          "input": {
+            "msg": "If you want VIP entry, just PayPal me the cover charge.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4536878764629364,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Please send half of the hotel cost when you can.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "payment_intent",
+          "confidence": 0.45553240180015564,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you please transfer the reimbursement through PayPal by tomorrow?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "payment_intent",
+          "confidence": 0.407489538192749,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you send me 3000 rupees for the school fundraiser?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "payment_intent",
+          "confidence": 0.38692405819892883,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you pay the entry fee for the competition for me?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "payment_intent",
+          "confidence": 0.3939722180366516,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Pay the invoice attached before end of day, please.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "payment_intent",
+          "confidence": 0.5715003609657288,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "可以给我转点饭钱吗？",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "payment_intent",
+          "confidence": 0.3951498568058014,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "请问能不能借我点钱买球票？",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "payment_intent",
+          "confidence": 0.3893984258174896,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Need help with the entry fee for Saturday's event.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "payment_intent",
+          "confidence": 0.5947117209434509,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "I’ll grab the coffee next time if you get it now.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "payment_intent",
+          "confidence": 0.42776453495025635,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Send me your crypto wallet address for the materials.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "payment_intent",
+          "confidence": 0.40562015771865845,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "If you cover the taxi, I'll get the drinks next round.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4281248152256012,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you pay the courier in cash when the sculpture arrives?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "payment_intent",
+          "confidence": 0.3816524147987366,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Can you pay the registration fee for my son’s workshop?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4001482427120209,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Drop $5 in my locker if you see me tomorrow.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4341771900653839,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Please pay the invoice attached to this email.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "payment_intent",
+          "confidence": 0.5688394904136658,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Spare me a few bucks for the Idol fan club membership renewal?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "payment_intent",
+          "confidence": 0.429720938205719,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Are you able to spot me £15 for the club membership?",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4206237196922302,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Might need a bit of help with the hotel deposit.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4652644991874695,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Wire me the funds by tomorrow morning, please.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4362073838710785,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Need $200 upfront to reserve the venue.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "payment_intent",
+          "confidence": 0.6379803419113159,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "If you can send me the funds by Friday, I can order the supplies on time.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4434674084186554,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Please send me the invoice for the legislative research services.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "payment_intent",
+          "confidence": 0.5879934430122375,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "We need $300 more for the Mars rover prototype parts.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "payment_intent",
+          "confidence": 0.5736721158027649,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Don’t forget to invoice me for the weatherproofing samples.",
+            "label": "payment_request"
+          },
+          "true_label": "payment_request",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4041416049003601,
+          "distance": null
+        }
+      ],
+      "open_intent->payment_intent": [
+        {
+          "input": {
+            "msg": "Just transferred the money for the museum tour—check your account!",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.41098320484161377,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "If you cover the pizza, I’ll bring drinks next time.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.46618548035621643,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Thanks for picking up the tab at the book launch.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.3931116461753845,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Appreciate you handling the booking fees for the museum tour.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.5090830326080322,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Thanks for splitting the cost of the record fair tickets.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.6110119223594666,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Just paid the utility bill, so we’re all set.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4506676495075226,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Let’s split the cost of the Uber later.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4550490081310272,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Transferred the funds to your account yesterday.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4296255111694336,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "That’s more expensive than I thought.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.39627572894096375,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Should I pay now, or wait until the invoice arrives?",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.3823704719543457,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Let’s talk about how to divide the rent.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.48803067207336426,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "That’s more than I expected for a concert ticket.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.5626661777496338,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Thanks for handling the ticket payments last time.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.5901594758033752,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "I think the artist should be fined for the damages.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.45182570815086365,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "If you pay for the tickets, I'll pay you back at the match.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.46824008226394653,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Thanks for buying lunch yesterday!",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.39265063405036926,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "My dad usually covers my conference fees, but I forgot to ask him.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.3948308229446411,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Thanks for the reimbursement last week, much appreciated.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.45966780185699463,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "I’m still waiting for my paycheck, so I can’t contribute yet.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.49772757291793823,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "My uncle always insists on paying, it’s kind of embarrassing.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4193150997161865,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Last year’s sponsorship made a real difference.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.5745013356208801,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Thanks for always being so generous with your expertise.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4497901499271393,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "I haven’t forgotten about the $15 coffee tab from last week.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4347774386405945,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Still thinking about how expensive those concert tickets were.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4005431830883026,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "That modeling gig barely covered my rent last month.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4182068407535553,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "I remember when Víctor Bertomeu played here and the tickets were just $5.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4472682476043701,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "It’s hard to believe these mining royalties are still pending.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.43167242407798767,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "I heard the school is increasing tuition again.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4297153055667877,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Wow, that African artifact fetched a great price at Sotheby’s!",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.3924311697483063,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Thanks for paying for the baby shower gifts last month.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.5643592476844788,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "I sent the funds last Thursday, check if they arrived.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.38121259212493896,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Remind me, do we pay the membership annually or monthly?",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4407087564468384,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "They said payment is due next year, so we have time.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.3922972083091736,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Appreciate you covering the entry fee at the bowling tournament last week.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4632069170475006,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "That was some pricey equipment for the chess club!",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4088444709777832,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Glad you got the soccer tickets sorted out.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.3908785283565521,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Nice of you to handle the V.League pool last season.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.47927355766296387,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Interesting how expensive ancient artifact restoration can get.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.38322505354881287,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "I remember you paying for the band’s concert tickets last year.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.47931650280952454,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "I can’t pay you back until Friday, hope that’s okay.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.46480709314346313,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "That crypto transfer finally went through.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.41278278827667236,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "I already paid for the pizza yesterday.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4287760853767395,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Remind me to pay you back for the camera lens.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4654196798801422,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Does your bank support international transfers without extra fees?",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.40344563126564026,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "I remember when concert tickets cost half as much in the '90s.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.442528635263443,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "I think the monthly phone plan prices in Singapore haven’t changed much.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.430520623922348,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "That’s a lot to pay for a street food tour in Dhaka, isn’t it?",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4641045331954956,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Not sure if the chain store owner ever got reimbursed for that.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4241477847099304,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Thanks for paying for my Hajj seminar last year.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.5383716225624084,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "I wonder if the environmental research grant covers equipment costs.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.48870354890823364,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "I hear the subscription service is way cheaper if you sign up annually.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.5019226670265198,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Not sure who paid for the tennis lesson last week, but thanks!",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.40821191668510437,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Let me know when you’re ready for me to pay the invoice.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.41947707533836365,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "I can’t believe how much that movie ticket cost!",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4109572768211365,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "You always order the fancy drinks, haha!",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.3992970883846283,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "That amount seems higher than what we agreed on.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.39169469475746155,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "That’s a hefty sum for a single ad campaign!",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.41815778613090515,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Has the insurance payout been finalized yet?",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.40410539507865906,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "The budget for team lunches seems tighter this year.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.5548093318939209,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "I wonder if the refund for the canceled trip has been issued yet.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4016658365726471,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Just paid for the group dinner, let me know your share.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4323920011520386,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Thanks for spotting me last time at the robotics meet.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.3974103033542633,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "I always appreciate your prompt payments for school activities.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.47934919595718384,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Let’s figure out the best way to split the bill after dinner.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.47744056582450867,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Already paid the last installment, waiting for the receipt.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4779820144176483,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "I’m not sure how much is left in the group fund.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.503800630569458,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Thanks for all your help with the bake sale last month.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4910609722137451,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Last year’s payment was higher, wasn’t it?",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4027712941169739,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "We have budgeted for the solar device, and the purchase order is already approved.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.5725492238998413,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "If you need help buying the smart plugs, just ask.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.3980555236339569,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "We’ve already reimbursed the PR consultant for crisis management services.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.5481523871421814,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "Already paid for the background check on your source last week.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4054073095321655,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "The school reimbursed me for the copper wire experiment supplies.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.4831332564353943,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "The consulting fee for your turnaround plan will be paid upon project completion.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.6149648427963257,
+          "distance": null
+        },
+        {
+          "input": {
+            "msg": "The chocolate manufacturer transferred the waste audit fee yesterday.",
+            "label": "open_intent"
+          },
+          "true_label": "open_intent",
+          "predicted_label": "payment_intent",
+          "confidence": 0.548403263092041,
+          "distance": null
+        }
+      ]
+    }
+  }
