@@ -300,7 +300,7 @@ async def evaluate_model(
         )
 
     except Exception as e:
-        logger.error(f"Evaluation failed: {str(e)}")
+        logger.error(f"Evaluation failed: {str(e)}\n ", exc_info=True)
         return schemas.EvaluationResponse(
             message=f"Evaluation failed: {str(e)}",
             status="error",
