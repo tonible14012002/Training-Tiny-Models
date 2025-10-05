@@ -85,10 +85,7 @@ async def generate_fresh_eval_data(request: Request):
     return {
         "message": "Evaluation data generation completed",
         "status": "completed",
-        "iteration_number": result["iteration_number"],
-        "intent_samples_generated": result["intent_count"],
-        "open_intent_messages_generated": result["open_intent_count"],
-        "total_generated": result["total_generated"]
+        "data": result
     }
 
 @router.post("/train")
@@ -139,7 +136,7 @@ async def continual_train_model(
         }
 
     # Get checkpoint path and validate it exists
-    checkpoint_path = trainer_service.get_item_path_by_id(checkpoint_id)
+    checkpoint_path = trainer_service._file_helper.get_item_path_by_id(checkpoint_id)
     if checkpoint_path is None:
         return {
             "status": "error",
@@ -199,7 +196,7 @@ async def evaluate_model(
     try:
         # Get checkpoint path - use specific checkpoint if provided, otherwise latest
         if payload.checkpoint_id:
-            checkpoint_path = trainer_service.get_item_path_by_id(payload.checkpoint_id)
+            checkpoint_path = trainer_service._file_helper.get_item_path_by_id(payload.checkpoint_id)
             if checkpoint_path is None:
                 return schemas.EvaluationResponse(
                     message=f"Checkpoint {payload.checkpoint_id} not found",
@@ -343,7 +340,7 @@ async def inference_model(
 
     # Get checkpoint path - use specific checkpoint if provided, otherwise latest
     if checkpoint_id:
-        checkpoint_pth = trainer_service.get_item_path_by_id(checkpoint_id)
+        checkpoint_pth = trainer_service._file_helper.get_item_path_by_id(checkpoint_id)
         if checkpoint_pth is None:
             return {
                 "message": f"Checkpoint {checkpoint_id} not found",
@@ -426,7 +423,7 @@ async def analyze_error_patterns(
     try:
         # Get checkpoint path - use specific checkpoint if provided, otherwise latest
         if payload.checkpoint_id:
-            checkpoint_path = trainer_service.get_item_path_by_id(payload.checkpoint_id)
+            checkpoint_path = trainer_service._file_helper.get_item_path_by_id(payload.checkpoint_id)
             if checkpoint_path is None:
                 return {
                     "message": f"Checkpoint {payload.checkpoint_id} not found",

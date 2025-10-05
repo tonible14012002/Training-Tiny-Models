@@ -1,4 +1,4 @@
-from .numerical_file_access import NumericalFileAccessMixin
-from .deduplication import DeduplicationMixin
+from .numerical_file_access import NumericalFileAccessHelper
+from .deduplication import DeduplicationHelper
 
-__all__ = ["NumericalFileAccessMixin", "DeduplicationMixin"]
+__all__ = ["NumericalFileAccessHelper", "DeduplicationHelper"]

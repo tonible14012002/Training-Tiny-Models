@@ -5,21 +5,20 @@ import os
 import re
 from datasets import Dataset
 from app.core.schemas.workflow import Sample, BaseLabelConfig
-from app.core.mixins import NumericalFileAccessMixin, DeduplicationMixin
+from app.core.mixins import NumericalFileAccessHelper, DeduplicationHelper
 
 logger = logging.getLogger(__name__)
 
-class EvalDataManager(NumericalFileAccessMixin, DeduplicationMixin):
-    def __init__(self, label_config: Type[BaseLabelConfig], rouge_threshold: float = 0.6):
-        self._rouge_threshold = rouge_threshold
+class EvalDataManager:
+    def __init__(self, label_config: Type[BaseLabelConfig], rouge_threshold: float = 0.6, base_dir: str = './cache/eval'):
         self.label_config = label_config
 
         # Create label-specific eval path
         label_name = self._sanitize_name(label_config.name())
-        self.BASE_LOCAL_EVAL_PATH = f'.cache/eval/{label_name}/'
 
-        # Ensure directory exists
-        os.makedirs(self.BASE_LOCAL_EVAL_PATH, exist_ok=True)
+        os.makedirs(f'{base_dir}/{label_name}/', exist_ok=True)
+        self._file_helper = NumericalFileAccessHelper(f'{base_dir}/{label_name}/')
+        self._dedup_helper = DeduplicationHelper(rouge_threshold)
 
     def _sanitize_name(self, name: str) -> str:
         """Sanitize label config name for use in file paths"""
@@ -30,14 +29,6 @@ class EvalDataManager(NumericalFileAccessMixin, DeduplicationMixin):
         # Remove leading/trailing underscores
         return sanitized.strip('_')
 
-    @property
-    def base_directory(self) -> str:
-        return self.BASE_LOCAL_EVAL_PATH
-
-    @property
-    def rouge_threshold(self) -> float:
-        return self._rouge_threshold
-
     def save(self, data: List[Sample], iteration_number: int = None):
         """
         Save evaluation data to a numbered folder.
@@ -47,7 +38,7 @@ class EvalDataManager(NumericalFileAccessMixin, DeduplicationMixin):
             iteration_number: Optional iteration number. If None, uses next available number.
         """
         if iteration_number is None:
-            iteration_number = self._get_next_number()
+            iteration_number = self._file_helper._get_next_number()
 
         self._save(data, iteration_number=iteration_number)
         return iteration_number
@@ -55,10 +46,10 @@ class EvalDataManager(NumericalFileAccessMixin, DeduplicationMixin):
     def _save(self, data: List[Sample], iteration_number: int):
         """Internal save method."""
         # Ensure base directory exists
-        self._ensure_base_directory()
+        self._file_helper._ensure_base_directory()
 
         # Create iteration folder
-        iteration_path = self._get_item_path(iteration_number)
+        iteration_path = self._file_helper._get_item_path(iteration_number)
         iteration_path.mkdir(exist_ok=True)
 
         # Save data as JSONL with integer labels
@@ -84,11 +75,11 @@ class EvalDataManager(NumericalFileAccessMixin, DeduplicationMixin):
             List of samples from the iteration
         """
         if iteration_number is None:
-            iteration_path = self.get_latest_item_path()
+            iteration_path = self._file_helper.get_latest_item_path()
             if iteration_path is None:
                 return []
         else:
-            iteration_path = self.get_item_path_by_number(iteration_number)
+            iteration_path = self._file_helper.get_item_path_by_number(iteration_number)
             if iteration_path is None:
                 return []
 
@@ -121,7 +112,7 @@ class EvalDataManager(NumericalFileAccessMixin, DeduplicationMixin):
             List of filtered samples
         """
         existing_data = self.load(iteration_number)
-        return await self.filter_against_existing(data, existing_data)
+        return await self._dedup_helper.filter_against_existing(data, existing_data)
 
     def append(self, data: List[Sample], iteration_number: int):
         """
@@ -149,7 +140,7 @@ class EvalDataManager(NumericalFileAccessMixin, DeduplicationMixin):
             iteration_number: Optional iteration number. If None, uses next available number.
         """
         if iteration_number is None:
-            iteration_number = self._get_next_number()
+            iteration_number = self._file_helper._get_next_number()
 
         self._save_open_intent(data, iteration_number=iteration_number)
         return iteration_number
@@ -157,10 +148,10 @@ class EvalDataManager(NumericalFileAccessMixin, DeduplicationMixin):
     def _save_open_intent(self, data: List[str], iteration_number: int):
         """Internal save method for open intent data."""
         # Ensure base directory exists
-        self._ensure_base_directory()
+        self._file_helper._ensure_base_directory()
 
         # Create iteration folder
-        iteration_path = self._get_item_path(iteration_number)
+        iteration_path = self._file_helper._get_item_path(iteration_number)
         iteration_path.mkdir(exist_ok=True)
 
         # Save data as simple text file, one message per line
@@ -182,11 +173,11 @@ class EvalDataManager(NumericalFileAccessMixin, DeduplicationMixin):
             List of open intent messages from the iteration
         """
         if iteration_number is None:
-            iteration_path = self.get_latest_item_path()
+            iteration_path = self._file_helper.get_latest_item_path()
             if iteration_path is None:
                 return []
         else:
-            iteration_path = self.get_item_path_by_number(iteration_number)
+            iteration_path = self._file_helper.get_item_path_by_number(iteration_number)
             if iteration_path is None:
                 return []
 
@@ -215,7 +206,17 @@ class EvalDataManager(NumericalFileAccessMixin, DeduplicationMixin):
             List of filtered open intent messages
         """
         existing_data = self.load_open_intent(iteration_number)
-        return await self._filter_strings_against_existing(data, existing_data)
+
+        # Convert strings to Sample objects with temp label
+        temp_label = "open_intent"
+        new_samples = [Sample(msg=msg, label=temp_label) for msg in data]
+        existing_samples = [Sample(msg=msg, label=temp_label) for msg in existing_data]
+
+        # Use existing filter method
+        filtered_samples = await self._dedup_helper.filter_against_existing(new_samples, existing_samples)
+
+        # Convert back to strings
+        return [sample.msg for sample in filtered_samples]
 
     def append_open_intent(self, data: List[str], iteration_number: int):
         """
@@ -233,62 +234,6 @@ class EvalDataManager(NumericalFileAccessMixin, DeduplicationMixin):
 
         # Save combined data
         self._save_open_intent(all_data, iteration_number)
-
-    async def deduplicate_open_intent(self, data: List[str]) -> List[str]:
-        """
-        Deduplicate open intent messages using ROUGE-L similarity.
-
-        Args:
-            data: List of messages to deduplicate
-
-        Returns:
-            Deduplicated list of messages
-        """
-        return await self._deduplicate_strings(data)
-
-    async def _filter_strings_against_existing(self, new_data: List[str], existing_data: List[str]) -> List[str]:
-        """Filter string messages against existing string messages using ROUGE-L."""
-        if not existing_data:
-            return new_data
-
-        filtered_data = []
-        for new_msg in new_data:
-            is_similar = False
-            for existing_msg in existing_data:
-                similarity = await self._calculate_rouge_l_similarity(new_msg, existing_msg)
-                if similarity > self.rouge_threshold:
-                    is_similar = True
-                    break
-
-            if not is_similar:
-                filtered_data.append(new_msg)
-
-        return filtered_data
-
-    async def _deduplicate_strings(self, data: List[str]) -> List[str]:
-        """Deduplicate a list of string messages using ROUGE-L similarity."""
-        if not data:
-            return []
-
-        deduplicated = [data[0]]  # Always keep the first item
-
-        for item in data[1:]:
-            is_similar = False
-            for existing_item in deduplicated:
-                similarity = await self._calculate_rouge_l_similarity(item, existing_item)
-                if similarity > self.rouge_threshold:
-                    is_similar = True
-                    break
-
-            if not is_similar:
-                deduplicated.append(item)
-
-        return deduplicated
-
-    async def _calculate_rouge_l_similarity(self, text1: str, text2: str) -> float:
-        """Calculate ROUGE-L similarity between two strings."""
-        from app.utils.scorer import EvaluationUtils
-        return await EvaluationUtils.score_rouge(text1, text2, rouge_type="rougeL")
 
     def to_datasets(self, iteration_number: int = None) -> Dataset:
         """
@@ -328,4 +273,4 @@ class EvalDataManager(NumericalFileAccessMixin, DeduplicationMixin):
         Returns:
             int: Latest iteration number
         """
-        return self._get_latest_number()
+        return self._file_helper._get_latest_number()

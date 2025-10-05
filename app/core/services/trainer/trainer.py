@@ -1,4 +1,4 @@
-from app.core.mixins import NumericalFileAccessMixin
+from app.core.mixins import NumericalFileAccessHelper
 from app.core.schemas.workflow import BaseLabelConfig
 from peft import LoraConfig, TaskType
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
@@ -17,11 +17,12 @@ import random
 
 logger = logging.getLogger(__name__)
 
-class TrainerService(NumericalFileAccessMixin):
+class TrainerService:
     def __init__(
             self,
             base_model: str,
-            label_config: Type[BaseLabelConfig]
+            label_config: Type[BaseLabelConfig],
+            base_dir: str = '.checkpoints'
         ):
         self.base_model = base_model
         self.label_config = label_config
@@ -30,10 +31,13 @@ class TrainerService(NumericalFileAccessMixin):
 
         # Create label-specific checkpoint directory
         label_name = self._sanitize_name(label_config.name())
-        self.CHECKPOINT_DIR = f'.checkpoints/{label_name}'
+        self.CHECKPOINT_DIR = f'{base_dir}/{label_name}'
 
         # Ensure directory exists
         os.makedirs(self.CHECKPOINT_DIR, exist_ok=True)
+
+        # Initialize file access helper
+        self._file_helper = NumericalFileAccessHelper(self.CHECKPOINT_DIR)
 
         self.lora_config = LoraConfig(
             r=16,                    # Increased rank for better capacity (was 8)
@@ -77,10 +81,6 @@ class TrainerService(NumericalFileAccessMixin):
         # Remove leading/trailing underscores
         return sanitized.strip('_')
 
-    @property
-    def base_directory(self) -> str:
-        return self.CHECKPOINT_DIR
-
     def setup(self):
         device = torch.accelerator.current_accelerator().type if hasattr(torch, "accelerator") else "cuda"
 
@@ -98,7 +98,7 @@ class TrainerService(NumericalFileAccessMixin):
 
     async def train(self, dataset: Dataset, inference_type: str = "prob"):
         # Save to next available checkpoint number
-        checkpoint_num = self._get_next_number()
+        checkpoint_num = self._file_helper._get_next_number()
         checkpoint_path = f"{self.CHECKPOINT_DIR}/{checkpoint_num}"
 
         self.training_args.output_dir = f"{checkpoint_path}/trainer_outputs"
@@ -151,7 +151,7 @@ class TrainerService(NumericalFileAccessMixin):
             The new sub-checkpoint identifier (e.g., "10.1", "10.2")
         """
         # Determine paths using the new method that supports any checkpoint ID
-        load_from_path, save_to_path = self.get_next_sub_version_from_id(checkpoint_id)
+        load_from_path, save_to_path = self._file_helper.get_next_sub_version_from_id(checkpoint_id)
 
         # Verify source checkpoint exists
         if not Path(load_from_path).exists():
@@ -205,15 +205,6 @@ class TrainerService(NumericalFileAccessMixin):
         # Extract and return the checkpoint identifier
         checkpoint_id = Path(save_to_path).name
         return checkpoint_id
-
-    def load_model(self):
-        latest_checkpoint_path = self.get_latest_item_path()
-        if latest_checkpoint_path is None:
-            raise ValueError("No checkpoints available")
-
-        model = AutoModelForSequenceClassification.from_pretrained(str(latest_checkpoint_path))
-        tokenizer = AutoTokenizer.from_pretrained(str(latest_checkpoint_path))
-        return model, tokenizer
 
     def _get_preprocessor(self, tokenizer: AutoTokenizer, field: str = 'msg'):
         def process(ds: Dataset):

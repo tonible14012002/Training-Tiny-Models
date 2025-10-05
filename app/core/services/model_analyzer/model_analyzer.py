@@ -13,9 +13,7 @@ from app.core.schemas.analysis import (
     LabelMetrics,
     TestCase,
     Prediction,
-    ErrorBucket,
     OpenIntentAnalysis,
-    MisclassifiedOpenIntent,
     ErrorCase,
     ErrorsByLabel
 )
@@ -35,10 +33,6 @@ class ModelAnalyzer:
         self.data_manager = data_manager
         self.label_config = label_config
         self.inferencer: Optional[BaseInferencer] = None
-
-    def set_inferencer(self, inferencer: BaseInferencer) -> None:
-        """Set the inferencer to use for model analysis"""
-        self.inferencer = inferencer
 
     def load_model(self, checkpoint_path: str, inferencer: Optional[BaseInferencer] = None) -> None:
         """Load the model from checkpoint path with provided inferencer or detect inference type"""
@@ -316,42 +310,3 @@ class ModelAnalyzer:
                 error_patterns[pattern_key].append(error_case)
 
         return error_patterns
-
-    def _analyze_open_intents(self, open_intent_samples: List[str]) -> Dict:
-        """Analyze open intent detection capability"""
-        if self.inferencer is None:
-            raise ValueError("Model not loaded")
-
-        predictions = self.inferencer.predict(open_intent_samples)
-
-        detected_as_unknown = sum(1 for pred in predictions if pred["label"] == "Unknown")
-        total_samples = len(open_intent_samples)
-        unknown_rate = detected_as_unknown / total_samples if total_samples > 0 else 0.0
-
-        # Analyze misclassified open intents
-        misclassified = []
-        for i, pred in enumerate(predictions):
-            if pred["label"] != "Unknown":
-                misclassified.append({
-                    "text": open_intent_samples[i],
-                    "predicted_as": pred["label"],
-                    "confidence": pred["prob"],
-                    "distance": pred.get("dis", 0.0)
-                })
-
-        result = {
-            "total_samples": total_samples,
-            "detected_as_unknown": detected_as_unknown,
-            "unknown_rate": unknown_rate,
-            "misclassified": misclassified,
-            "false_positive_rate": (total_samples - detected_as_unknown) / total_samples if total_samples > 0 else 0.0
-        }
-
-        # Add logging to track the data
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info(f"Open intent analysis results: {total_samples} total, {detected_as_unknown} detected as unknown, {len(misclassified)} misclassified")
-        if misclassified:
-            logger.info(f"Sample misclassified items: {misclassified[:2]}")
-
-        return result

@@ -6,24 +6,22 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class DeduplicationMixin:
+class DeduplicationHelper:
     """
-    Mixin class for handling deduplication and filtering logic for data.
+    Helper class for handling deduplication and filtering logic for data.
 
-    This mixin provides functionality to deduplicate data samples based on ROUGE-L scores
+    This helper provides functionality to deduplicate data samples or strings based on ROUGE-L scores
     and filter new data against existing datasets.
-
-    Classes using this mixin should define:
-    - rouge_threshold: float - The ROUGE-L threshold for deduplication
     """
 
-    @property
-    def rouge_threshold(self) -> float:
+    def __init__(self, rouge_threshold: float = 0.6):
         """
-        ROUGE-L threshold for deduplication.
-        Must be implemented by the class using this mixin.
+        Initialize the deduplication helper.
+
+        Args:
+            rouge_threshold: The ROUGE-L threshold for deduplication (default: 0.6)
         """
-        raise NotImplementedError("Classes using DeduplicationMixin must define rouge_threshold")
+        self.rouge_threshold = rouge_threshold
 
     async def deduplicate(self, data: List[Sample]) -> List[Sample]:
         """
@@ -124,24 +122,3 @@ class DeduplicationMixin:
         logger.debug(f"Label-based + sliding window filtering reduced comparisons from {total_comparisons_before} to {total_comparisons_after}")
         logger.debug(f"Window size: {window_size} per label")
         return filtered
-
-    async def deduplicate_and_filter(self, new_data: List[Sample], existing_data: List[Sample] = None) -> List[Sample]:
-        """
-        Combined deduplication and filtering operation.
-
-        Args:
-            new_data: New samples to process
-            existing_data: Optional existing samples to filter against
-
-        Returns:
-            List of processed samples
-        """
-        # First deduplicate within new data
-        deduped_data = await self.deduplicate(new_data)
-
-        # Then filter against existing data if provided
-        if existing_data:
-            filtered_data = await self.filter_against_existing(deduped_data, existing_data)
-            return filtered_data
-
-        return deduped_data

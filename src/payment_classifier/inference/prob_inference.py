@@ -97,7 +97,7 @@ class ProbModelInference:
 
         return predictions
 
-    def evaluate(self, known_intent_data: Dataset, unknown_intent_texts: List[str]) -> dict:
+    def evaluate(self, known_intent_data: Dataset) -> dict:
         """
         Evaluate using probability-based predictions.
         Note: This doesn't handle unknown intents as there's no ADB mechanism.
@@ -117,15 +117,6 @@ class ProbModelInference:
             known_predictions.extend(predictions)
             known_true_labels.extend(true_labels)
 
-        # For unknown intents, we still predict but note they'll be mapped to known labels
-        unknown_predictions = []
-        if unknown_intent_texts:
-            for i in range(0, len(unknown_intent_texts), batch_size):
-                batch_texts = unknown_intent_texts[i:i+batch_size]
-                predictions = self.predict(batch_texts)
-                unknown_predictions.extend(predictions)
-
-        # Calculate metrics for known intents only (probability-based doesn't handle unknowns)
         all_predictions = known_predictions
         all_true_labels = [self.id2label[label] for label in known_true_labels]
 
@@ -210,21 +201,14 @@ class ProbModelInference:
         return {
             "overall": {
                 "accuracy": overall_accuracy,
-                "unknown_rate": 0.0,  # No unknown handling in probability-based inference
                 "macro_precision": macro_precision,
                 "macro_recall": macro_recall,
                 "macro_f1": macro_f1,
                 "total_samples": total_samples,
                 "correct_predictions": correct,
-                "unknown_predictions": 0,  # No unknown predictions
                 "known_intent_samples": len(known_intent_data),
-                "unknown_intent_samples": len(unknown_intent_texts) if unknown_intent_texts else 0
             },
             "per_label": per_label_metrics,
-            "unknown_analysis": {
-                "note": "Probability-based inference does not support unknown intent detection",
-                "unknown_predictions_mapped_to_known": len(unknown_predictions) if unknown_predictions else 0
-            },
             "inference_info": {
                 "type": "probability_based",
                 "labels": self.id2label

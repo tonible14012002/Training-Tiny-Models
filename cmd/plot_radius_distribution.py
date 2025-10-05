@@ -17,15 +17,17 @@ import json
 from pathlib import Path
 
 from src.payment_classifier.inference.adb_inference import ADBModelInference
-from app.core.mixins.numerical_file_access import NumericalFileAccessMixin
+from app.core.mixins.numerical_file_access import NumericalFileAccessHelper
 
 
-class CheckpointManager(NumericalFileAccessMixin):
+class CheckpointManager:
     """Helper class to manage checkpoint loading"""
 
-    @property
-    def base_directory(self) -> str:
-        return ".checkpoints"
+    def __init__(self):
+        self._file_helper = NumericalFileAccessHelper(".checkpoints")
+
+    def get_latest_item_path(self):
+        return self._file_helper.get_latest_item_path()
 
 
 def load_training_dataset(data_path: str) -> Dataset:

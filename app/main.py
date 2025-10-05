@@ -59,7 +59,6 @@ async def lifespan(app: FastAPI):
         llm=teacher_llm,
         prompt_mgr=prompt_mgr,
         data_manager=data_manager,
-        eval_data_manager=eval_data_manager,
     )
 
     logger.info("Initializing eval generator...")
