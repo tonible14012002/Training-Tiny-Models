@@ -97,7 +97,7 @@ class ProbModelInference:
 
         return predictions
 
-    def evaluate(self, known_intent_data: Dataset) -> dict:
+    def evaluate(self, test_set: Dataset, get_error_samples: bool = False, get_low_confidence: bool = False, confidence_threshold: float = 0.5) -> dict:
         """
         Evaluate using probability-based predictions.
         Note: This doesn't handle unknown intents as there's no ADB mechanism.
@@ -108,8 +108,8 @@ class ProbModelInference:
         known_true_labels = []
 
         batch_size = 32
-        for i in range(0, len(known_intent_data), batch_size):
-            batch = known_intent_data[i:i+batch_size]
+        for i in range(0, len(test_set), batch_size):
+            batch = test_set[i:i+batch_size]
             texts = batch['msg']
             true_labels = batch['label']
 
@@ -129,14 +129,35 @@ class ProbModelInference:
         false_negatives = defaultdict(int)
 
         correct = 0
+        low_confidence_correct = []  # Store correctly predicted samples with low confidence
+        error_samples = []  # Store misclassified samples if requested
 
         # Calculate metrics
-        for pred, true_label_str in zip(all_predictions, all_true_labels):
+        for idx, (pred, true_label_str) in enumerate(zip(all_predictions, all_true_labels)):
             pred_label = pred["label"]
 
             # Overall accuracy
             if pred_label == true_label_str:
                 correct += 1
+
+                # Track low confidence correct predictions if requested
+                if get_low_confidence and pred["prob"] < confidence_threshold:
+                    low_confidence_correct.append({
+                        "text": test_set[idx]['msg'],
+                        "true_label": true_label_str,
+                        "predicted_label": pred_label,
+                        "probability": pred["prob"],
+                        "all_probs": pred["all_probs"]
+                    })
+            else:
+                if get_error_samples:
+                    error_samples.append({
+                        "text": test_set[idx]['msg'],
+                        "true_label": true_label_str,
+                        "predicted_label": pred_label,
+                        "probability": pred["prob"],
+                        "all_probs": pred["all_probs"]
+                    })
 
             # Binary classification metrics for each label
             for label in all_labels:
@@ -198,7 +219,7 @@ class ProbModelInference:
 
         overall_accuracy = correct / total_samples if total_samples > 0 else 0.0
 
-        return {
+        result = {
             "overall": {
                 "accuracy": overall_accuracy,
                 "macro_precision": macro_precision,
@@ -206,7 +227,7 @@ class ProbModelInference:
                 "macro_f1": macro_f1,
                 "total_samples": total_samples,
                 "correct_predictions": correct,
-                "known_intent_samples": len(known_intent_data),
+                "known_intent_samples": len(test_set),
             },
             "per_label": per_label_metrics,
             "inference_info": {
@@ -214,3 +235,17 @@ class ProbModelInference:
                 "labels": self.id2label
             }
         }
+        if get_error_samples:
+            result["error_samples"] = {
+                "samples": error_samples,
+                "count": len(error_samples)
+            }
+
+        if get_low_confidence:
+            result["low_confidence_correct"] = {
+                "samples": low_confidence_correct,
+                "count": len(low_confidence_correct),
+                "threshold": confidence_threshold
+            }
+
+        return result

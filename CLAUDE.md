@@ -1,0 +1,1 @@
+- From now on, onlywork in api/v2/ folder (new endpoints), old endpoints are for reference only

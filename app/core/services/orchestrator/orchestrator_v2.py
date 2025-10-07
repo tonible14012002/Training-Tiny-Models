@@ -1,19 +1,20 @@
 import typing as t
-from app.core.services import *
-from app.core.schemas import BaseLabelConfig, PAYMENT_LABEL_V2
+from app.core import services
+from app.core import schemas
 from src.payment_classifier.llm.litellm import LiteLLMProvider
 from src.payment_classifier.prompts import InmemoryPromptManager
 from src.payment_classifier.llm.settings import LLMSettings
 from src.payment_classifier.inference.prob_inference import ProbModelInference
 from app.core.settings import settings
+from app import utils as app_utils
 from datasets import Dataset
 
 class AutoPipelineV2:
     def __init__(self):
         base_dir = "./cache/pipeline"
-        label_config = PAYMENT_LABEL_V2
+        label_config = schemas.PAYMENT_LABEL_V2
         prompt_mgr = InmemoryPromptManager()
-        data_manager = DataManager(
+        data_manager = services.DataManager(
             label_config=label_config,
             rouge_threshold=0.6,
             base_dir=f'{base_dir}/data'
@@ -28,39 +29,26 @@ class AutoPipelineV2:
             )
         )
 
-        self.data_generator = DataGeneratorV2(
+        self.data_generator = services.DataGeneratorV2(
             llm=llm,
             prompt_mgr=prompt_mgr,
             data_manager=data_manager,
         )
-        self.trainer_service = TrainerService(
+        self.trainer_service = services.TrainerService(
             base_model="prajjwal1/bert-tiny",
             label_config=label_config,
             base_dir=f'{base_dir}/trainer'
         )
+        self.error_categorizer = services.ErrorCategorizer(
+            label_config=label_config,
+            llm=llm,
+            prompt_mgr=prompt_mgr,
+        )
+
         self.label_config = label_config
-
-        # eval_data_manager = EvalDataManager(
-        #     label_config=label_config,
-        #     rouge_threshold=0.6,
-        #     base_dir=f'{base_dir}/eval'
-        # )
-        #
-        # self.eval_generator = EvalGenerator(
-        #     llm=llm,
-        #     prompt_mgr=prompt_mgr,
-        #     eval_data_manager=eval_data_manager,
-        #     data_manager=data_manager,
-        # )
-
 
     async def run(
         self,
-        base_dir: str = "./cache/pipeline",
-        max_iterations: int = 20,
-        target_f1_per_label: float = 0.7,
-        samples_per_action: int = 500,
-        iteration_number: t.Optional[int] = None,
         human_seed_path: t.Optional[str] = None,
     ) -> t.Dict:
 
@@ -70,9 +58,9 @@ class AutoPipelineV2:
         await self.data_generator.fresh_gen_v2(
             human_seeds=human_seed,
             expect_total_each_label={
-                PAYMENT_LABEL_V2.PAYMENT_INTENT: 200,
-                PAYMENT_LABEL_V2.PAYMENT_REQUEST: 200,
-                PAYMENT_LABEL_V2.OPEN_INTENT: 200
+                schemas.PAYMENT_LABEL_V2.PAYMENT_INTENT: 200,
+                schemas.PAYMENT_LABEL_V2.PAYMENT_REQUEST: 200,
+                schemas.PAYMENT_LABEL_V2.OPEN_INTENT: 200
             }
         )
 
@@ -82,14 +70,16 @@ class AutoPipelineV2:
 
         inferencer = ProbModelInference(
             peft_path=base_checkpoint_id,
-            label_config=PAYMENT_LABEL_V2
+            label_config=schemas.PAYMENT_LABEL_V2
         )
 
         eval_result = inferencer.evaluate(human_eval_ds)
+        samples = app_utils.DatasetHelper.ds_to_samples(human_eval_ds, self.label_config)
+        
+        self.error_categorizer.categorize_errors(samples)
 
     def load_frozen_human_eval(self):
         import json
-        import os
 
         human_eval_file = ".cache/frozen_human_eval.json"
         msgs = []

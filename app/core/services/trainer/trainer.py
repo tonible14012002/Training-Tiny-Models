@@ -1,6 +1,6 @@
 from app.core.mixins import NumericalFileAccessHelper
 from app.core.schemas.workflow import BaseLabelConfig
-from peft import LoraConfig, TaskType
+from peft import LoraConfig, TaskType, PeftModel
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from transformers.training_args import TrainingArguments
 from transformers.trainer import Trainer
@@ -66,7 +66,7 @@ class TrainerService:
             # per_device_train_batch_size=8,     # Smaller batches
             per_device_eval_batch_size=16,
             gradient_accumulation_steps=4,     # Effective batch size = 32
-            num_train_epochs=3,                # More epochs
+            num_train_epochs=2,                # More epochs
             # warmup_ratio=0.15,                 # More warmup
             # weight_decay=0.02,                 # Stronger regularization
             report_to="none",
@@ -121,6 +121,9 @@ class TrainerService:
         trainer.train()
         logger.info(f"Training completed. Saving to checkpoint: {checkpoint_path}")
         trainer.save_model(checkpoint_path)
+        
+        merged_model = trainer.model.merge_and_unload()
+        merged_model.save_pretrained(checkpoint_path + "/_merged")
 
         # Perform post-training calculations based on inference type
         if inference_type == "adb":
@@ -163,14 +166,18 @@ class TrainerService:
         # Set up training args with new output directory
         self.training_args.output_dir = f"{save_to_path}/trainer_outputs"
 
-        # Load existing model (already has LoRA adapters merged)
+        # Load base model and existing PEFT adapters
         device = torch.accelerator.current_accelerator().type if hasattr(torch, "accelerator") else "cuda"
 
-        model = AutoModelForSequenceClassification.from_pretrained(
-            load_from_path,
+        # Load the base model first
+        base_model = AutoModelForSequenceClassification.from_pretrained(
+            self.base_model,
             label2id=self.label2id,
             id2label=self.id2label
         ).to(device)
+
+        # Load the PEFT adapters from the checkpoint
+        model = PeftModel.from_pretrained(base_model, load_from_path)
 
         tokenizer = AutoTokenizer.from_pretrained(load_from_path)
 
@@ -189,8 +196,12 @@ class TrainerService:
 
         logger.info("Starting continual training...")
         trainer.train()
+
         logger.info(f"Training completed. Saving to checkpoint: {save_to_path}")
         trainer.save_model(save_to_path)
+
+        merged_model = trainer.model.merge_and_unload()
+        merged_model.save_pretrained(save_to_path + "/_merged")
 
         # Perform post-training calculations based on inference type
         if inference_type == "adb":

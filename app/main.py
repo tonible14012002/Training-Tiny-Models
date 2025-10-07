@@ -1,5 +1,6 @@
 import logging
 from contextlib import asynccontextmanager
+from sqlalchemy.ext.asyncio import create_async_engine
 
 import uvicorn
 from fastapi import Depends, FastAPI
@@ -10,6 +11,7 @@ from starlette.exceptions import HTTPException
 
 from app.api.dependencies import api_key_auth
 from app.api.routes import health, workflow
+from app.api.routes import v2 as routes_v2
 from app.core.settings import settings, RELOAD_DIRS
 from app.core import services
 from app.core.schemas.workflow import PAYMENT_LABEL_V2
@@ -31,28 +33,28 @@ async def lifespan(app: FastAPI):
     # Store settings in app state
     app.state.settings = settings
 
+    engine = create_async_engine(
+        settings.DATABASE_URL,
+        echo=False,
+        pool_pre_ping=True,
+        pool_recycle=3600,
+        pool_size=5,
+        max_overflow=10,
+        connect_args={"statement_cache_size": 0},
+    )
+
     teacher_llm = LiteLLMProvider(LLMSettings(
-        llm_model_name="gpt-4.1",
+        llm_model_name="gpt-4o-mini",
         api_key=settings.OPENAI_API_KEY,
         temperature=0.7,
         num_retries=2,
     ))
 
+
     prompt_mgr = InmemoryPromptManager()
 
     logger.info("Initializing data manager...")
     data_manager = services.DataManager(label_config)
-
-    logger.info("Initializing eval data manager...")
-    eval_data_manager = services.EvalDataManager(label_config)
-
-    logger.info("Initializing data generator...")
-    # data_generator = services.DataGenerator(
-    #     llm=teacher_llm,
-    #     prompt_mgr=prompt_mgr,
-    #     data_manager=data_manager,
-    #     eval_data_manager=eval_data_manager,
-    # )
 
     logger.info("Initializing data generator v2...")
     data_generator_v2 = services.DataGeneratorV2(
@@ -61,86 +63,47 @@ async def lifespan(app: FastAPI):
         data_manager=data_manager,
     )
 
-    logger.info("Initializing eval generator...")
-    eval_generator = services.EvalGenerator(
-        llm=teacher_llm,
-        prompt_mgr=prompt_mgr,
-        data_manager=data_manager,
-        eval_data_manager=eval_data_manager,
-        generate_open_intent=settings.GENERATE_OPEN_INTENT_EVAL,
-    )
-
     trainer_service =  services.TrainerService(
         base_model="prajjwal1/bert-tiny",
         label_config=label_config
     )
 
-    logger.info("Initializing model analyzer...")
-    model_analyzer = services.ModelAnalyzer(
-        trainer_service=trainer_service,
-        data_manager=data_manager,
-        label_config=label_config
-    )
-
-    logger.info("Initializing error pattern analysis service...")
-    error_pattern_analyzer = services.ErrorPatternAnalysisService(
-        llm=teacher_llm,
-        prompt_mgr=prompt_mgr
-    )
-
-    logger.info("Initializing prompt builder...")
-    prompt_builder = services.PromptBuilder(
-        llm=teacher_llm,
-        prompt_mgr=prompt_mgr,
-        label_config=label_config,
-    )
-
     logger.info("Initializing training orchestrator...")
-    orchestrator = services.TrainingOrchestrator(
-        data_generator=data_generator_v2,
-        trainer_service=trainer_service,
-        model_analyzer=model_analyzer,
-        data_manager=data_manager,
-        eval_data_manager=eval_data_manager,
-        error_pattern_analyzer=error_pattern_analyzer,
-        prompt_builder=prompt_builder,
-        label_config=label_config
-    )
+
+    # Store database engine for session creation
+    app.state.engine = engine
 
     app.state.data_manager = data_manager
-    app.state.eval_data_manager = eval_data_manager
-    # app.state.data_generator = data_generator
     app.state.data_generator_v2 = data_generator_v2
-    app.state.eval_generator = eval_generator
-    app.state.prompt_mgr = prompt_mgr
     app.state.trainer_service = trainer_service
-    app.state.model_analyzer = model_analyzer
-    app.state.error_pattern_analyzer = error_pattern_analyzer
-    app.state.prompt_builder = prompt_builder
-    app.state.orchestrator = orchestrator
+    app.state.prompt_mgr = prompt_mgr
+    app.state.label_config = label_config
+
+    logger.info("Application startup complete.")
 
     yield  # The app runs here
 
     # Cleanup resources when shutting down
     logger.info("Shutting down fine-tuning workflow API...")
+    await engine.dispose()
 
 
 # Exception handlers
-async def http_exception_handler(request, exc):
+async def http_exception_handler(_, exc):
     return ORJSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail}
     )
 
 
-async def request_validation_exception_handler(request, exc: RequestValidationError):
+async def request_validation_exception_handler(_, exc: RequestValidationError):
     return ORJSONResponse(
         status_code=422,
         content={"detail": exc.errors(), "body": exc.body}
     )
 
 
-async def unhandled_exception_handler(request, exc):
+async def unhandled_exception_handler(_, exc):
     logger.error(f"Unhandled exception: {exc}")
     return ORJSONResponse(
         status_code=500,
@@ -175,6 +138,7 @@ app.add_exception_handler(RequestValidationError, request_validation_exception_h
 # Include routers
 app.include_router(health.router)
 app.include_router(workflow.router)
+app.include_router(routes_v2.workflow.router, prefix="/v2", tags=["v2"])
 
 
 if __name__ == "__main__":

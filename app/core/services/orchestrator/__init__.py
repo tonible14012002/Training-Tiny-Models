@@ -1,3 +1,1 @@
-from .training_orchestrator import TrainingOrchestrator
-
-__all__ = ["TrainingOrchestrator"]
+from .orchestrator_v2 import *

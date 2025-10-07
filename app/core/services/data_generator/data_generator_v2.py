@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 class DataGeneratorV2:
     SEED_PROMPT_KEY = "v2/train/seed"
-    DEFAULT_TOTAL_MESSAGES = 600  # Default target for V2 (higher due to parallel generation)
 
     def __init__(self, llm: BaseLLM, prompt_mgr: BasePromptManager, data_manager: DataManager):
         self.llm = llm
@@ -23,8 +22,7 @@ class DataGeneratorV2:
     async def fresh_gen(self, human_seeds: List[Sample], expect_total_message: int = None) -> List[Sample]:
         """Generate fresh data using the default prompt"""
         # Use provided target or default
-        target_messages = expect_total_message or self.DEFAULT_TOTAL_MESSAGES
-        parallel_generations, total_message_per_batch, batches = self._calculate_v2_generation_params(target_messages)
+        parallel_generations, total_message_per_batch, batches = self._calculate_v2_generation_params(expect_total_message)
         prompt = self.prompt_mgr.get_prompt(self.SEED_PROMPT_KEY)
 
         return await self.iterative_gen(human_seeds, prompt, parallel_generations, total_message_per_batch, batches)
@@ -90,10 +88,12 @@ class DataGeneratorV2:
             # Filter against existing data
             filtered_results = await self.data_manager.filter(internal_deduped)
 
-            # Append filtered results to the correct label tracker
+            # Append filtered results to the correct label tracker (only if not exceeding target)
             for sample in filtered_results:
                 if sample.label in quantity_tracker:
-                    quantity_tracker[sample.label].append(sample)
+                    # Only add if this label hasn't reached its target yet
+                    if len(quantity_tracker[sample.label]) < expect_total_each_label[sample.label]:
+                        quantity_tracker[sample.label].append(sample)
 
             # Save the filtered results
             self.data_manager.save(filtered_results)
@@ -103,6 +103,14 @@ class DataGeneratorV2:
             previous_batch_results = batch_results
 
             logger.debug(f"Iteration {iteration}: Generated {len(batch_results)} samples, {len(filtered_results)} after filtering")
+
+        # Trim excess samples from any overflowed labels
+        for label, expected_count in expect_total_each_label.items():
+            if len(quantity_tracker[label]) > expected_count:
+                # Randomly remove excess samples
+                excess_count = len(quantity_tracker[label]) - expected_count
+                quantity_tracker[label] = random.sample(quantity_tracker[label], expected_count)
+                logger.info(f"Trimmed {excess_count} excess samples from label '{label}'")
 
         logger.info(f"Generation complete after {iteration} iterations. Final counts: {self._get_current_counts(quantity_tracker)}")
 
@@ -215,7 +223,7 @@ class DataGeneratorV2:
             - saved_count: Number of samples saved after deduplication
         """
         # Use provided amount or default
-        target_messages = amount or self.DEFAULT_TOTAL_MESSAGES
+        target_messages = amount
 
         # Calculate generation parameters
         parallel_generations, total_message_per_batch, total_batches = self._calculate_v2_generation_params(target_messages)
@@ -276,8 +284,8 @@ class DataGeneratorV2:
         '''
         Generate data from given seed and prompt
         '''
-        personas_txt = "n- ".join(PersonasSeeder.random(10))  # Use a reasonable default for personas
-
+        personas_txt = "n- ".join(PersonasSeeder.random(6))  # Use a reasonable default for personas
+        
         seed_examples_txt = "\n".join([f"- {s.msg}" for s in seed])
         formatted_prompt = prompt.format(personas=personas_txt)
 

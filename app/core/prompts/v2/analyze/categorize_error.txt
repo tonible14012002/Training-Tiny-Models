@@ -1,0 +1,18 @@
+The current model task is to classify a given chat message having payment intent or payment request or no intent at all.
+Your task is to analyze the error from the model and classify them into ONE bucket below
+
+## Label Explanation
+- **payment_intent**: The user is declaring they will send money right now or in near future OR The user gives an imperative instruction to a system to execute a payment in bitcoin lightning network (e.g., “Pay Alice $20 now”).
+- **payment_request**: The user request to receive money. (can be request, inform, force, ...)
+- **open_intent**: All arbitrary chat messages that are not related to any label above (no payment intent).
+
+## Error Message To Analyze
+Message: {message}
+predicted: {pred_label}
+actual: {true_label}
+
+## Error buckets:
+{bucket_details}
+
+## Output Requirement
+Respone the output JSON without any additional text
