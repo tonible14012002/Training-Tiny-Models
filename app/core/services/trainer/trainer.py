@@ -1,5 +1,5 @@
 from app.core.mixins import NumericalFileAccessHelper
-from app.core.schemas.workflow import BaseLabelConfig
+from app.core.models.models import LabelConfig
 from peft import LoraConfig, TaskType, PeftModel
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from transformers.training_args import TrainingArguments
@@ -12,7 +12,6 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import Type
 import random
 
 logger = logging.getLogger(__name__)
@@ -21,16 +20,16 @@ class TrainerService:
     def __init__(
             self,
             base_model: str,
-            label_config: Type[BaseLabelConfig],
+            label_config: LabelConfig,
             base_dir: str = '.checkpoints'
         ):
         self.base_model = base_model
         self.label_config = label_config
-        self.label2id = label_config.to_dict()
-        self.id2label = label_config.to_id2label()
+        self.label2id = label_config.get_label2id()
+        self.id2label = label_config.get_id2label()
 
         # Create label-specific checkpoint directory
-        label_name = self._sanitize_name(label_config.name())
+        label_name = self._sanitize_name(label_config.name)
         self.CHECKPOINT_DIR = f'{base_dir}/{label_name}'
 
         # Ensure directory exists
@@ -96,7 +95,7 @@ class TrainerService:
             self.training_args
         ]
 
-    async def train(self, dataset: Dataset, inference_type: str = "prob"):
+    async def train(self, dataset: Dataset, inference_type: str = "prob",return_full_path: bool = False) -> str:
         # Save to next available checkpoint number
         checkpoint_num = self._file_helper._get_next_number()
         checkpoint_path = f"{self.CHECKPOINT_DIR}/{checkpoint_num}"
@@ -135,6 +134,8 @@ class TrainerService:
             self._post_train_prob(checkpoint_path)
             logger.info(f"Probability-based inference config saved to {checkpoint_path}")
 
+        if return_full_path:
+            return checkpoint_path
         return checkpoint_num
 
     async def continual_train(

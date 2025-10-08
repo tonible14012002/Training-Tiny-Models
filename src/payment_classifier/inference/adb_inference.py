@@ -1,10 +1,10 @@
 from transformers import AutoTokenizer
 from peft import AutoPeftModelForSequenceClassification
-from app.core.schemas.workflow import BaseLabelConfig
+from app.core.models.models import LabelConfig
 from app.core.schemas.inference import ThresholdConfig
 from datasets import Dataset
 import torch
-from typing import List, Type, Optional
+from typing import List, Optional
 from collections import defaultdict
 import json
 from pathlib import Path
@@ -13,7 +13,7 @@ class ADBModelInference:
     def __init__(
         self,
         peft_path: str,
-        label_config: Type[BaseLabelConfig],
+        label_config: LabelConfig,
         threshold_config: Optional[ThresholdConfig] = None
     ):
         self.peft_path = peft_path
@@ -34,8 +34,8 @@ class ADBModelInference:
         self.tokenizer = tokenizer or AutoTokenizer.from_pretrained(peft_path)
 
         # Use injected label configuration
-        self.label2id = self.label_config.to_dict()
-        self.id2label = self.label_config.to_id2label()
+        self.label2id = self.label_config.get_label2id()
+        self.id2label = self.label_config.get_id2label()
 
         self.peft_model = AutoPeftModelForSequenceClassification.from_pretrained(
             peft_path,

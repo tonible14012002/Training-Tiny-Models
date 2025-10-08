@@ -1,5 +1,7 @@
 from typing import Optional, List
-from sqlmodel import Session, select
+from sqlmodel import select
+from sqlalchemy.orm import *
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.models.models import (
     Pipeline,
@@ -12,29 +14,34 @@ from app.core.models.models import (
 class PipelineRepository:
     """Repository for Pipeline operations"""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: AsyncSession):
         self.session = session
 
-    def create(self, name: str) -> Pipeline:
+    async def create(self, name: str):
         """Create a new pipeline"""
         pipeline = Pipeline(name=name)
         self.session.add(pipeline)
-        self.session.commit()
-        self.session.refresh(pipeline)
+        await self.session.commit()
+        await self.session.refresh(pipeline)
         return pipeline
 
-    def get_by_id(self, pipeline_id: str) -> Optional[Pipeline]:
+    async def get_by_id(self, pipeline_id: str) -> Optional[Pipeline]:
         """Get pipeline by ID"""
-        return self.session.get(Pipeline, pipeline_id)
+        statement = select(Pipeline).where(Pipeline.id == pipeline_id).options(
+            selectinload(Pipeline.label_configs)
+        )
+        result = await self.session.execute(statement)
+        return result.scalars().first()
 
-    def get_all(self) -> List[Pipeline]:
+    async def get_all(self) -> List[Pipeline]:
         """Get all pipelines"""
-        statement = select(Pipeline)
-        return list(self.session.exec(statement).all())
+        statement = select(Pipeline).options(selectinload(Pipeline.label_configs))
+        result = await self.session.execute(statement)
+        return list(result.scalars().all())
 
-    def update(self, pipeline_id: str, name: Optional[str] = None) -> Optional[Pipeline]:
+    async def update(self, pipeline_id: str, name: Optional[str] = None) -> Optional[Pipeline]:
         """Update pipeline"""
-        pipeline = self.get_by_id(pipeline_id)
+        pipeline = await self.get_by_id(pipeline_id)
         if not pipeline:
             return None
 
@@ -43,46 +50,49 @@ class PipelineRepository:
         pipeline.updated_at = utc_now()
 
         self.session.add(pipeline)
-        self.session.commit()
-        self.session.refresh(pipeline)
+        await self.session.commit()
+        await self.session.refresh(pipeline)
         return pipeline
 
-    def delete(self, pipeline_id: str) -> bool:
+    async def delete(self, pipeline_id: str) -> bool:
         """Delete pipeline"""
-        pipeline = self.get_by_id(pipeline_id)
+        pipeline = await self.get_by_id(pipeline_id)
         if not pipeline:
             return False
 
         self.session.delete(pipeline)
-        self.session.commit()
+        await self.session.commit()
         return True
 
-    def get_with_phases(self, pipeline_id: str) -> Optional[Pipeline]:
+    async def get_with_phases(self, pipeline_id: str) -> Optional[Pipeline]:
         """Get pipeline with all phases"""
-        pipeline = self.get_by_id(pipeline_id)
-        if pipeline:
-            # Force load relationships
-            _ = pipeline.phases
-        return pipeline
+        statement = select(Pipeline).where(Pipeline.id == pipeline_id).options(
+            selectinload(Pipeline.phases),
+            selectinload(Pipeline.label_configs)
+        )
+        result = await self.session.execute(statement)
+        return result.scalars().first()
 
-    def get_with_all_relations(self, pipeline_id: str) -> Optional[Pipeline]:
+    async def get_with_all_relations(self, pipeline_id: str) -> Optional[Pipeline]:
         """Get pipeline with all relationships loaded"""
-        pipeline = self.get_by_id(pipeline_id)
-        if pipeline:
-            _ = pipeline.phases
-            _ = pipeline.label_configs
-            _ = pipeline.datasets
-            _ = pipeline.error_buckets
-        return pipeline
+        statement = select(Pipeline).where(Pipeline.id == pipeline_id).options(
+            selectinload(Pipeline.phases),
+            selectinload(Pipeline.label_configs),
+            selectinload(Pipeline.datasets),
+            selectinload(Pipeline.error_buckets)
+        )
+        result = await self.session.execute(statement)
+        return result.scalars().first()
 
-    def get_active_pipelines(self) -> List[Pipeline]:
+    async def get_active_pipelines(self) -> List[Pipeline]:
         """Get pipelines with in-progress phases"""
         statement = select(Pipeline).join(PipelinePhase).where(
             PipelinePhase.status == "in_progress"
         )
-        return list(self.session.exec(statement).all())
+        result = await self.session.execute(statement)
+        return list(result.scalars().all())
 
-    def create_label_config(
+    async def create_label_config(
         self,
         pipeline_id: str,
         name: str,
@@ -91,7 +101,7 @@ class PipelineRepository:
         label_explanation: Optional[str] = None
     ) -> Optional[LabelConfig]:
         """Create label config for pipeline"""
-        pipeline = self.get_by_id(pipeline_id)
+        pipeline = await self.get_by_id(pipeline_id)
         if not pipeline:
             return None
 
@@ -103,11 +113,12 @@ class PipelineRepository:
             label_explanation=label_explanation
         )
         self.session.add(label_config)
-        self.session.commit()
-        self.session.refresh(label_config)
+        await self.session.commit()
+        await self.session.refresh(label_config)
         return label_config
 
-    def get_label_config(self, pipeline_id: str) -> Optional[LabelConfig]:
+    async def get_label_config(self, pipeline_id: str) -> Optional[LabelConfig]:
         """Get label config for pipeline"""
         statement = select(LabelConfig).where(LabelConfig.pipeline_id == pipeline_id)
-        return self.session.exec(statement).first()
+        result = await self.session.execute(statement)
+        return result.scalars().first()

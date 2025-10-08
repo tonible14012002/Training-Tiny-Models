@@ -207,3 +207,117 @@ class OrchestratorRunRequest(BaseModel):
         default=None,
         description="Evaluation dataset iteration number to use. If None, uses latest."
     )
+
+class LabelConfigRequest(BaseModel):
+    """Request schema for label configuration"""
+    name: str = Field(
+        ...,
+        description="Name of the label configuration",
+        examples=["Payment Classification v2"]
+    )
+    id2label: Dict[str, str] = Field(
+        ...,
+        description="Mapping from ID to label string",
+        examples=[{
+            "0": "payment_request",
+            "1": "payment_intent",
+            "2": "open_intent"
+        }]
+    )
+    label2id: Dict[str, int] = Field(
+        ...,
+        description="Mapping from label string to ID",
+        examples=[{
+            "payment_request": 0,
+            "payment_intent": 1,
+            "open_intent": 2
+        }]
+    )
+    label_explanation: Optional[Dict[str, str]] = Field(
+        default=None,
+        description="Explanation for each label",
+        examples=[{
+            "payment_intent": "The user is declaring they will send money right now or in near future OR The user gives an imperative instruction to a system to execute a payment",
+            "payment_request": "The user request to receive money (can be request, inform, force, remind, ...)",
+            "open_intent": "All arbitrary chat messages that are not related to any payment intent"
+        }]
+    )
+
+class CreatePipelineRequest(BaseModel):
+    """Request schema for creating a new pipeline"""
+    name: str = Field(
+        ...,
+        description="Name of the pipeline",
+        examples=["Payment Classification Pipeline"]
+    )
+    label_config: LabelConfigRequest = Field(
+        ...,
+        description="Label configuration for the pipeline"
+    )
+
+class LabelConfigResponse(BaseModel):
+    """Response schema for label configuration"""
+    id: str
+    name: str
+    id2label: Dict[str, str]
+    label2id: Dict[str, int]
+    label_explanation: Optional[Dict[str, str]]
+    created_at: str
+
+class PipelineResponse(BaseModel):
+    """Response schema for pipeline"""
+    id: str
+    name: str
+    created_at: str
+    updated_at: str
+    label_config: Optional[LabelConfigResponse] = None
+
+class ListPipelinesResponse(BaseModel):
+    """Response schema for listing pipelines"""
+    message: str
+    data: List[PipelineResponse]
+
+
+class ClassifyErrorRequest(BaseModel):
+    phase_id: Optional[str] = Field(
+        None,
+        description="The ID of the phase within the pipeline"
+    )
+
+class StartPhaseRequest(BaseModel):
+    pipeline_id: str = Field(
+        ...,
+        description="The ID of the pipeline to start a new phase for"
+    )
+    phase_id: Optional[str] = Field(
+        None,
+        description="Optional phase ID to resume. If not provided, a new phase is started."
+    )
+
+class StartTrainPhase(BaseModel):
+    phase_id: str = Field(
+        ...,
+        description="The ID of the phase to train"
+    )
+
+class StartEvaluationPhase(BaseModel):
+    phase_id: str = Field(
+        ...,
+        description="The ID of the phase to evaluate"
+    )
+    confidence_thresholds: float = Field(
+        0.5,
+        description="Confidence threshold for filter low confidence predictions"
+    )
+
+class StartErrBucketPhaese(BaseModel):
+    phase_id: str = Field(
+        ...,
+        description="The ID of the phase to classify error buckets"
+    )
+
+class PHASE_STATUS:
+    NOT_STARTED = "not_started"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"

@@ -27,7 +27,7 @@ class DataGeneratorV2:
 
         return await self.iterative_gen(human_seeds, prompt, parallel_generations, total_message_per_batch, batches)
 
-    async def fresh_gen_v2(self, human_seeds: List[Sample], expect_total_each_label: Dict[Union[str, int], int]) -> List[Sample]:
+    async def fresh_gen_v2(self, human_seeds: List[Sample], expect_total_each_label: Dict[Union[str, int], int]) -> tuple[List[Sample], str]:
         """Generate fresh data with label-based quantity tracking
 
         Args:
@@ -37,7 +37,9 @@ class DataGeneratorV2:
                                     or {0: 200, 1: 200, 2: 200}
 
         Returns:
-            List of all generated samples
+            Tuple of (final_samples, base_file_path)
+            - final_samples: List of final samples (exact count per label as specified)
+            - base_file_path: Path to the base data file where samples are saved
         """
         prompt = self.prompt_mgr.get_prompt(self.SEED_PROMPT_KEY)
 
@@ -82,39 +84,39 @@ class DataGeneratorV2:
             for results in parallel_results:
                 batch_results.extend(results)
 
-            # Deduplicate within the batch
-            internal_deduped = await self.data_manager._dedup_helper.deduplicate(batch_results)
+            # Deduplicate within the batch and against all_results so far
+            combined_for_dedup = all_results + batch_results
+            internal_deduped = await self.data_manager._dedup_helper.deduplicate(combined_for_dedup)
 
-            # Filter against existing data
-            filtered_results = await self.data_manager.filter(internal_deduped)
+            # Get only the new unique samples (not in all_results)
+            new_unique = [s for s in internal_deduped if s not in all_results]
 
-            # Append filtered results to the correct label tracker (only if not exceeding target)
-            for sample in filtered_results:
+            # Add new unique samples to quantity tracker (only if not exceeding target)
+            added_count = 0
+            for sample in new_unique:
                 if sample.label in quantity_tracker:
                     # Only add if this label hasn't reached its target yet
                     if len(quantity_tracker[sample.label]) < expect_total_each_label[sample.label]:
                         quantity_tracker[sample.label].append(sample)
-
-            # Save the filtered results
-            self.data_manager.save(filtered_results)
+                        added_count += 1
 
             # Update all_results and previous_batch_results for next iteration
             all_results.extend(batch_results)
             previous_batch_results = batch_results
 
-            logger.debug(f"Iteration {iteration}: Generated {len(batch_results)} samples, {len(filtered_results)} after filtering")
+            logger.debug(f"Iteration {iteration}: Generated {len(batch_results)} samples, added {added_count} unique samples to tracker")
 
-        # Trim excess samples from any overflowed labels
-        for label, expected_count in expect_total_each_label.items():
-            if len(quantity_tracker[label]) > expected_count:
-                # Randomly remove excess samples
-                excess_count = len(quantity_tracker[label]) - expected_count
-                quantity_tracker[label] = random.sample(quantity_tracker[label], expected_count)
-                logger.info(f"Trimmed {excess_count} excess samples from label '{label}'")
+        # Flatten quantity_tracker to get final samples
+        final_samples = []
+        for samples in quantity_tracker.values():
+            final_samples.extend(samples)
 
-        logger.info(f"Generation complete after {iteration} iterations. Final counts: {self._get_current_counts(quantity_tracker)}")
+        logger.info(f"Generation complete after {iteration} iterations. Final counts: {self._get_current_counts(quantity_tracker)}, Total: {len(final_samples)}")
 
-        return all_results
+        # Use hard_save to overwrite the file with exact final samples
+        self.data_manager.hard_save(final_samples)
+
+        return final_samples, self.data_manager.LOCAL_FILE
 
     def _is_quantity_sufficient(self, quantity_tracker: Dict[Union[str, int], List[Sample]],
                                 expect_total_each_label: Dict[Union[str, int], int]) -> bool:

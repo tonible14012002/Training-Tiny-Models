@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     # HUMAN_REVIEW_FREQUENCY: int = Field(default=1000, description="Review every N examples")
     # ALERT_F1_DROP_THRESHOLD: float = Field(default=0.05, description="Alert if F1 drops by this much")
     # SCHEMA_ERROR_THRESHOLD: float = Field(default=0.05, description="Alert if schema errors exceed this rate")
-    DATABASE_URL: str = Field(default="sqlite:///./test.db", description="Database connection URL")
+    DATABASE_URL: str = Field(default="sqlite+aiosqlite:///./test.db", description="Database connection URL")
     BASE_DIR: str = "."
 
     class Config:

@@ -3,3 +3,4 @@ from .data_manager.data_manager import DataManager
 from .trainer.trainer import TrainerService
 from .orchestrator import AutoPipelineV2
 from .prompt_builder import PromptBuilder
+from .error_categorizer import ErrorCategorizer

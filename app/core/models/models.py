@@ -87,6 +87,7 @@ class ComposalDataset(SQLModel, table=True):
     pipeline_id: str = Field(foreign_key="pipeline.id")
     name: Optional[str] = Field(default=None, max_length=255)
     description: Optional[str] = Field(default=None)
+    file_path: Optional[str] = Field(default=None)  # Path to the combined dataset file
     total_samples: int = Field(default=0)
     created_at: datetime = Field(default_factory=utc_now)
 
@@ -133,7 +134,6 @@ class ErrorBucket(SQLModel, table=True):
         """Parse examples JSON string to list of dicts"""
         return json.loads(self.examples)
 
-
 class PhaseErrorBucket(SQLModel, table=True):
     """Phase error bucket table for tracking errors per phase"""
     __tablename__ = "phase_error_bucket"
@@ -154,3 +154,91 @@ class PhaseErrorBucket(SQLModel, table=True):
     def get_examples(self) -> List[dict]:
         """Parse examples JSON string to list of dicts"""
         return json.loads(self.examples)
+
+
+class ErrorBucketPhase(SQLModel, table=True):
+    """Error bucket phase table - cloned from base ErrorBucket with phase-specific error categorization"""
+    __tablename__ = "error_bucket_phase"
+
+    id: str = Field(default_factory=generate_uuid, primary_key=True)
+    phase_id: str = Field(foreign_key="pipeline_phase.id")
+    base_error_bucket_id: str = Field(foreign_key="error_bucket.id")  # The base bucket this was cloned from
+    name: str = Field(max_length=255)  # Cloned from base bucket
+    description: str  # Cloned from base bucket
+    examples: str = Field()  # JSON list of examples with labels: [{"text": "...", "label": "...", "prediction": "..."}, ...]
+    count: int = Field(default=0)  # Number of errors in this category for this phase
+    data_generation_strategy: Optional[str] = Field(default=None)  # Cloned from base bucket
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+    def get_examples(self) -> List[dict]:
+        """Parse examples JSON string to list of dicts"""
+        return json.loads(self.examples)
+
+
+class HumanTestSet(SQLModel, table=True):
+    """Human test set table for storing custom human dataset files"""
+    __tablename__ = "human_test_set"
+
+    id: str = Field(default_factory=generate_uuid, primary_key=True)
+    pipeline_id: Optional[str] = Field(default=None, foreign_key="pipeline.id")
+    name: str = Field(max_length=255)
+    file_path: str
+    description: Optional[str] = Field(default=None)
+    sample_count: int = Field(default=0)
+    created_at: datetime = Field(default_factory=utc_now)
+
+    # Relationships
+    evaluation_results: List["EvaluationResult"] = Relationship(back_populates="human_test_set")
+
+
+class TrainedModel(SQLModel, table=True):
+    """Trained model table for storing trained model information"""
+    __tablename__ = "trained_model"
+
+    id: str = Field(default_factory=generate_uuid, primary_key=True)
+    phase_id: str = Field(foreign_key="pipeline_phase.id")
+    model_name: str = Field(max_length=255)
+    model_save_path: str
+    training_time: Optional[float] = Field(default=None)  # Training time in seconds
+    dataset_file_id: Optional[str] = Field(default=None, foreign_key="dataset_file.id")
+    training_params: Optional[str] = Field(default=None)  # JSON string with training parameters
+    status: str = Field(default="training", max_length=50)  # training, completed, failed
+    created_at: datetime = Field(default_factory=utc_now)
+    completed_at: Optional[datetime] = Field(default=None)
+
+    # Relationships
+    evaluation_results: List["EvaluationResult"] = Relationship(back_populates="trained_model")
+
+    def get_training_params(self) -> Optional[dict]:
+        """Parse training_params JSON string to dict"""
+        return json.loads(self.training_params) if self.training_params else None
+
+
+class EvaluationResult(SQLModel, table=True):
+    """Evaluation result table for storing model evaluation results"""
+    __tablename__ = "evaluation_result"
+
+    id: str = Field(default_factory=generate_uuid, primary_key=True)
+    trained_model_id: str = Field(foreign_key="trained_model.id")
+    human_test_set_id: Optional[str] = Field(default=None, foreign_key="human_test_set.id")
+    dataset_file_id: Optional[str] = Field(default=None, foreign_key="dataset_file.id")
+    accuracy: Optional[float] = Field(default=None)
+    precision: Optional[float] = Field(default=None)
+    recall: Optional[float] = Field(default=None)
+    f1_score: Optional[float] = Field(default=None)
+    label_metrics: Optional[str] = Field(default=None)  # JSON string for per-label metrics: {"label_name": {"precision": 0.95, "recall": 0.92, "f1_score": 0.93, "support": 100}}
+    metrics: Optional[str] = Field(default=None)  # JSON string for additional metrics
+    evaluated_at: datetime = Field(default_factory=utc_now)
+
+    # Relationships
+    trained_model: TrainedModel = Relationship(back_populates="evaluation_results")
+    human_test_set: Optional[HumanTestSet] = Relationship(back_populates="evaluation_results")
+
+    def get_metrics(self) -> Optional[dict]:
+        """Parse metrics JSON string to dict"""
+        return json.loads(self.metrics) if self.metrics else None
+
+    def get_label_metrics(self) -> Optional[dict]:
+        """Parse label_metrics JSON string to dict"""
+        return json.loads(self.label_metrics) if self.label_metrics else None

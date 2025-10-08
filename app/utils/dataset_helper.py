@@ -1,6 +1,7 @@
-from typing import List, Type
+from typing import List
 from datasets import Dataset
-from app.core.schemas.workflow import Sample, BaseLabelConfig
+from app.core.schemas.workflow import Sample
+from app.core.models.models import LabelConfig
 
 
 class DatasetHelper:
@@ -9,27 +10,28 @@ class DatasetHelper:
     @staticmethod
     def ds_to_samples(
         dataset: Dataset,
-        label_config: Type[BaseLabelConfig]
+        label_config: LabelConfig
     ) -> List[Sample]:
         """
         Convert a dataset with integer labels to a list of Sample instances with string labels.
 
         Args:
             dataset: HuggingFace Dataset instance with integer labels
-            label_config: Label configuration class (e.g., PAYMENT_LABEL, PAYMENT_LABEL_V2)
+            label_config: LabelConfig model instance from database
 
         Returns:
             List[Sample]: List of Sample instances with labels converted from int to string
         """
         samples = []
+        id2label = label_config.get_id2label()
 
         for item in dataset:
             # Extract message and label from dataset item
             msg = item.get('msg') or item.get('text') or item.get('message', '')
             label_int = item.get('label')
 
-            # Convert integer label to string using label_config
-            label_str = label_config.to_str(label_int)
+            # Convert integer label to string using id2label dict
+            label_str = id2label[str(label_int)]
 
             # Create Sample instance
             sample = Sample(msg=msg, label=label_str)
@@ -40,7 +42,7 @@ class DatasetHelper:
     @staticmethod
     def json_to_ds(
         json_list: List[dict],
-        label_config: Type[BaseLabelConfig]
+        label_config: LabelConfig
     ) -> Dataset:
 
         data = {

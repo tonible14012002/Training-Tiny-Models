@@ -1,4 +1,5 @@
 from app.core import schemas
+from app.core.models.models import LabelConfig
 from src.payment_classifier.llm.base import BaseLLM
 from src.payment_classifier.prompts.base import BasePromptManager
 
@@ -10,7 +11,7 @@ class PromptBuilder:
 
     def __init__(
             self,
-            label_config: schemas.BaseLabelConfig,
+            label_config: LabelConfig,
             llm: BaseLLM,
             prompt_mgr: BasePromptManager
         ):

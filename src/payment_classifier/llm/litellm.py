@@ -73,9 +73,6 @@ class LiteLLMProvider(BaseLLM):
                     logger.warning(f"Rate limit detected in error: {str(e)}")
                     logger.info(f"Waiting {wait_time}s before retry (attempt {attempt + 1}/{self._max_rate_limit_retries})...")
                     await asyncio.sleep(wait_time)
-                else:
-                    # Re-raise other exceptions immediately
-                    raise
 
     async def _generate_output(self, prompts: List[Dict[str, str]]) -> str:
         """Generate a text completion using LiteLLM.

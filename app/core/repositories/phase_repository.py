@@ -1,5 +1,6 @@
 from typing import Optional, List
-from sqlmodel import Session, select
+from sqlmodel import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 
 from app.core.models.models import PipelinePhase, utc_now
@@ -8,10 +9,10 @@ from app.core.models.models import PipelinePhase, utc_now
 class PhaseRepository:
     """Repository for PipelinePhase operations"""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: AsyncSession):
         self.session = session
 
-    def create(
+    async def create(
         self,
         pipeline_id: str,
         phase_number: int,
@@ -30,51 +31,55 @@ class PhaseRepository:
             status=status
         )
         self.session.add(phase)
-        self.session.commit()
-        self.session.refresh(phase)
+        await self.session.commit()
+        await self.session.refresh(phase)
         return phase
 
-    def get_by_id(self, phase_id: str) -> Optional[PipelinePhase]:
+    async def get_by_id(self, phase_id: str) -> Optional[PipelinePhase]:
         """Get phase by ID"""
-        return self.session.get(PipelinePhase, phase_id)
+        return await self.session.get(PipelinePhase, phase_id)
 
-    def get_by_pipeline(self, pipeline_id: str) -> List[PipelinePhase]:
+    async def get_by_pipeline(self, pipeline_id: str) -> List[PipelinePhase]:
         """Get all phases for a pipeline"""
         statement = select(PipelinePhase).where(
             PipelinePhase.pipeline_id == pipeline_id
         ).order_by(PipelinePhase.phase_number)
-        return list(self.session.exec(statement).all())
+        result = await self.session.execute(statement)
+        return list(result.scalars().all())
 
-    def get_by_phase_number(self, pipeline_id: str, phase_number: int) -> Optional[PipelinePhase]:
+    async def get_by_phase_number(self, pipeline_id: str, phase_number: int) -> Optional[PipelinePhase]:
         """Get phase by pipeline ID and phase number"""
         statement = select(PipelinePhase).where(
             PipelinePhase.pipeline_id == pipeline_id,
             PipelinePhase.phase_number == phase_number
         )
-        return self.session.exec(statement).first()
+        result = await self.session.execute(statement)
+        return result.scalars().first()
 
-    def get_latest_phase(self, pipeline_id: str) -> Optional[PipelinePhase]:
+    async def get_latest_phase(self, pipeline_id: str) -> Optional[PipelinePhase]:
         """Get the latest phase for a pipeline"""
         statement = select(PipelinePhase).where(
             PipelinePhase.pipeline_id == pipeline_id
         ).order_by(PipelinePhase.phase_number.desc())
-        return self.session.exec(statement).first()
+        result = await self.session.execute(statement)
+        return result.scalars().first()
 
-    def get_by_checkpoint_id(self, checkpoint_id: str) -> Optional[PipelinePhase]:
+    async def get_by_checkpoint_id(self, checkpoint_id: str) -> Optional[PipelinePhase]:
         """Get phase by checkpoint ID"""
         statement = select(PipelinePhase).where(
             PipelinePhase.checkpoint_id == checkpoint_id
         )
-        return self.session.exec(statement).first()
+        result = await self.session.execute(statement)
+        return result.scalars().first()
 
-    def update_status(
+    async def update_status(
         self,
         phase_id: str,
         status: str,
         completed_at: Optional[datetime] = None
-    ) -> Optional[PipelinePhase]:
+    ):
         """Update phase status"""
-        phase = self.get_by_id(phase_id)
+        phase = await self.get_by_id(phase_id)
         if not phase:
             return None
 
@@ -85,18 +90,18 @@ class PhaseRepository:
             phase.completed_at = utc_now()
 
         self.session.add(phase)
-        self.session.commit()
-        self.session.refresh(phase)
+        await self.session.commit()
+        await self.session.refresh(phase)
         return phase
 
-    def update_checkpoint(
+    async def update_checkpoint(
         self,
         phase_id: str,
         checkpoint_id: str,
         checkpoint_path: str
     ) -> Optional[PipelinePhase]:
         """Update phase checkpoint information"""
-        phase = self.get_by_id(phase_id)
+        phase = await self.get_by_id(phase_id)
         if not phase:
             return None
 
@@ -104,61 +109,64 @@ class PhaseRepository:
         phase.checkpoint_path = checkpoint_path
 
         self.session.add(phase)
-        self.session.commit()
-        self.session.refresh(phase)
+        await self.session.commit()
+        await self.session.refresh(phase)
         return phase
 
-    def get_completed_phases(self, pipeline_id: str) -> List[PipelinePhase]:
+    async def get_completed_phases(self, pipeline_id: str) -> List[PipelinePhase]:
         """Get all completed phases for a pipeline"""
         statement = select(PipelinePhase).where(
             PipelinePhase.pipeline_id == pipeline_id,
             PipelinePhase.status == "completed"
         ).order_by(PipelinePhase.phase_number)
-        return list(self.session.exec(statement).all())
+        result = await self.session.execute(statement)
+        return list(result.scalars().all())
 
-    def get_in_progress_phase(self, pipeline_id: str) -> Optional[PipelinePhase]:
+    async def get_in_progress_phase(self, pipeline_id: str) -> Optional[PipelinePhase]:
         """Get the in-progress phase for a pipeline"""
         statement = select(PipelinePhase).where(
             PipelinePhase.pipeline_id == pipeline_id,
             PipelinePhase.status == "in_progress"
         )
-        return self.session.exec(statement).first()
+        result = await self.session.execute(statement)
+        return result.scalars().first()
 
-    def get_pending_phases(self, pipeline_id: str) -> List[PipelinePhase]:
+    async def get_pending_phases(self, pipeline_id: str) -> List[PipelinePhase]:
         """Get all pending phases for a pipeline"""
         statement = select(PipelinePhase).where(
             PipelinePhase.pipeline_id == pipeline_id,
             PipelinePhase.status == "pending"
         ).order_by(PipelinePhase.phase_number)
-        return list(self.session.exec(statement).all())
+        result = await self.session.execute(statement)
+        return list(result.scalars().all())
 
-    def delete(self, phase_id: str) -> bool:
+    async def delete(self, phase_id: str) -> bool:
         """Delete phase"""
-        phase = self.get_by_id(phase_id)
+        phase = await self.get_by_id(phase_id)
         if not phase:
             return False
 
         self.session.delete(phase)
-        self.session.commit()
+        await self.session.commit()
         return True
 
-    def get_phase_chain(self, phase_id: str) -> List[PipelinePhase]:
+    async def get_phase_chain(self, phase_id: str) -> List[PipelinePhase]:
         """Get the chain of phases leading to this phase"""
         phases = []
-        current_phase = self.get_by_id(phase_id)
+        current_phase = await self.get_by_id(phase_id)
 
         while current_phase:
             phases.insert(0, current_phase)
             if current_phase.previous_phase_id:
-                current_phase = self.get_by_id(current_phase.previous_phase_id)
+                current_phase = await self.get_by_id(current_phase.previous_phase_id)
             else:
                 break
 
         return phases
 
-    def get_with_error_buckets(self, phase_id: str) -> Optional[PipelinePhase]:
+    async def get_with_error_buckets(self, phase_id: str) -> Optional[PipelinePhase]:
         """Get phase with error buckets loaded"""
-        phase = self.get_by_id(phase_id)
+        phase = await self.get_by_id(phase_id)
         if phase:
             _ = phase.phase_error_buckets
         return phase

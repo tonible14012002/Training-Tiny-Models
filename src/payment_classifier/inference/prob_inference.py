@@ -1,10 +1,10 @@
 from transformers import AutoTokenizer
 from peft import AutoPeftModelForSequenceClassification
-from app.core.schemas.workflow import BaseLabelConfig
+from app.core.models.models import LabelConfig
 from app.core.schemas.inference import ThresholdConfig
 from datasets import Dataset
 import torch
-from typing import List, Type, Dict, Any, Optional
+from typing import List, Dict, Any, Optional
 from collections import defaultdict
 
 
@@ -12,7 +12,7 @@ class ProbModelInference:
     def __init__(
         self,
         peft_path: str,
-        label_config: Type[BaseLabelConfig],
+        label_config: LabelConfig,
         threshold_config: Optional[ThresholdConfig] = None
     ):
         self.peft_path = peft_path
@@ -32,8 +32,8 @@ class ProbModelInference:
         self.tokenizer = tokenizer or AutoTokenizer.from_pretrained(peft_path)
 
         # Use injected label configuration
-        self.label2id = self.label_config.to_dict()
-        self.id2label = self.label_config.to_id2label()
+        self.label2id = self.label_config.get_label2id()
+        self.id2label = self.label_config.get_id2label()
 
         self.peft_model = AutoPeftModelForSequenceClassification.from_pretrained(
             peft_path,
@@ -65,11 +65,11 @@ class ProbModelInference:
             # Get the predicted label (highest probability)
             predicted_label_id = probs[i].argmax().item()
             predicted_prob = probs[i, predicted_label_id].item()
-            original_label = self.id2label[predicted_label_id]
+            original_label = self.id2label[str(predicted_label_id)]
 
             # Get all probabilities for this sample
             all_probs = {
-                self.id2label[label_id]: probs[i, label_id].item()
+                self.id2label[str(label_id)]: probs[i, label_id].item()
                 for label_id in range(len(self.id2label))
             }
 
@@ -97,7 +97,7 @@ class ProbModelInference:
 
         return predictions
 
-    def evaluate(self, test_set: Dataset, get_error_samples: bool = False, get_low_confidence: bool = False, confidence_threshold: float = 0.5) -> dict:
+    def evaluate(self, test_set: Dataset, get_error_samples: bool = False, get_low_confidence: bool = False, confidence_threshold: float = 0.5, low_conf_limit: int = 200) -> dict:
         """
         Evaluate using probability-based predictions.
         Note: This doesn't handle unknown intents as there's no ADB mechanism.
@@ -118,7 +118,7 @@ class ProbModelInference:
             known_true_labels.extend(true_labels)
 
         all_predictions = known_predictions
-        all_true_labels = [self.id2label[label] for label in known_true_labels]
+        all_true_labels = [self.id2label[str(label)] for label in known_true_labels]
 
         total_samples = len(all_predictions)
         all_labels = set(self.id2label.values())
@@ -141,7 +141,7 @@ class ProbModelInference:
                 correct += 1
 
                 # Track low confidence correct predictions if requested
-                if get_low_confidence and pred["prob"] < confidence_threshold:
+                if get_low_confidence and pred["prob"] < confidence_threshold and len(low_confidence_correct) < low_conf_limit:
                     low_confidence_correct.append({
                         "text": test_set[idx]['msg'],
                         "true_label": true_label_str,

@@ -39,10 +39,14 @@ class AutoPipelineV2:
             label_config=label_config,
             base_dir=f'{base_dir}/trainer'
         )
+        # TODO: Update to use database ErrorBucket instances instead of schema-based buckets
+        # This orchestrator needs to be refactored to work with the new ErrorCategorizer API
+        # For now, this will fail - use api/v2 endpoints instead
         self.error_categorizer = services.ErrorCategorizer(
             label_config=label_config,
             llm=llm,
             prompt_mgr=prompt_mgr,
+            error_buckets=[],  # FIXME: Pass actual ErrorBucket model instances from database
         )
 
         self.label_config = label_config
@@ -55,7 +59,7 @@ class AutoPipelineV2:
         human_seed = self.load_human_seeds() if human_seed_path else []
 
         # First Iteration
-        await self.data_generator.fresh_gen_v2(
+        generated, base_file_path = await self.data_generator.fresh_gen_v2(
             human_seeds=human_seed,
             expect_total_each_label={
                 schemas.PAYMENT_LABEL_V2.PAYMENT_INTENT: 200,

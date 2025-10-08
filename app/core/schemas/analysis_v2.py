@@ -3,6 +3,10 @@ from .workflow import Sample
 import typing as t
 
 
+class CategorizeResult(BaseModel):
+    bucket: str = Field(description="The name of the error bucket the test case is categorized into")
+    reason: str = Field(description="A brief explanation of why the test case was categorized into this bucket")
+
 class AnalyzeTestCase(BaseModel):
     sample: Sample
     predicted: str

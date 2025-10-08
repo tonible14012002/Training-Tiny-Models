@@ -1,5 +1,6 @@
 from typing import Optional, List
-from sqlmodel import Session, select
+from sqlmodel import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.models.models import ComposalDataset, DatasetFile
 
@@ -7,56 +8,61 @@ from app.core.models.models import ComposalDataset, DatasetFile
 class DatasetRepository:
     """Repository for ComposalDataset operations"""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: AsyncSession):
         self.session = session
 
-    def create(
+    async def create_composal_ds(
         self,
         pipeline_id: str,
         name: Optional[str] = None,
         description: Optional[str] = None,
+        file_path: Optional[str] = None,
         total_samples: int = 0
     ) -> ComposalDataset:
-        """Create a new dataset"""
+        """Create a new composal dataset (collection/container for dataset files)"""
         dataset = ComposalDataset(
             pipeline_id=pipeline_id,
             name=name,
             description=description,
+            file_path=file_path,
             total_samples=total_samples
         )
         self.session.add(dataset)
-        self.session.commit()
-        self.session.refresh(dataset)
+        await self.session.commit()
+        await self.session.refresh(dataset)
         return dataset
 
-    def get_by_id(self, dataset_id: str) -> Optional[ComposalDataset]:
+    async def get_by_id(self, dataset_id: str) -> Optional[ComposalDataset]:
         """Get dataset by ID"""
-        return self.session.get(ComposalDataset, dataset_id)
+        return await self.session.get(ComposalDataset, dataset_id)
 
-    def get_by_pipeline(self, pipeline_id: str) -> List[ComposalDataset]:
+    async def get_by_pipeline(self, pipeline_id: str) -> List[ComposalDataset]:
         """Get all datasets for a pipeline"""
         statement = select(ComposalDataset).where(
             ComposalDataset.pipeline_id == pipeline_id
-        )
-        return list(self.session.exec(statement).all())
+        ).order_by(ComposalDataset.created_at.desc())
+        result = await self.session.execute(statement)
+        return list(result.scalars().all())
 
-    def get_by_name(self, pipeline_id: str, name: str) -> Optional[ComposalDataset]:
+    async def get_by_name(self, pipeline_id: str, name: str) -> Optional[ComposalDataset]:
         """Get dataset by name within a pipeline"""
         statement = select(ComposalDataset).where(
             ComposalDataset.pipeline_id == pipeline_id,
             ComposalDataset.name == name
         )
-        return self.session.exec(statement).first()
+        result = await self.session.execute(statement)
+        return result.scalars().first()
 
-    def update(
+    async def update(
         self,
         dataset_id: str,
         name: Optional[str] = None,
         description: Optional[str] = None,
+        file_path: Optional[str] = None,
         total_samples: Optional[int] = None
     ) -> Optional[ComposalDataset]:
         """Update dataset"""
-        dataset = self.get_by_id(dataset_id)
+        dataset = await self.get_by_id(dataset_id)
         if not dataset:
             return None
 
@@ -64,40 +70,42 @@ class DatasetRepository:
             dataset.name = name
         if description:
             dataset.description = description
+        if file_path:
+            dataset.file_path = file_path
         if total_samples is not None:
             dataset.total_samples = total_samples
 
         self.session.add(dataset)
-        self.session.commit()
-        self.session.refresh(dataset)
+        await self.session.commit()
+        await self.session.refresh(dataset)
         return dataset
 
-    def increment_samples(self, dataset_id: str, count: int) -> Optional[ComposalDataset]:
+    async def increment_samples(self, dataset_id: str, count: int) -> Optional[ComposalDataset]:
         """Increment total samples count"""
-        dataset = self.get_by_id(dataset_id)
+        dataset = await self.get_by_id(dataset_id)
         if not dataset:
             return None
 
         dataset.total_samples += count
 
         self.session.add(dataset)
-        self.session.commit()
-        self.session.refresh(dataset)
+        await self.session.commit()
+        await self.session.refresh(dataset)
         return dataset
 
-    def delete(self, dataset_id: str) -> bool:
+    async def delete(self, dataset_id: str) -> bool:
         """Delete dataset"""
-        dataset = self.get_by_id(dataset_id)
+        dataset = await self.get_by_id(dataset_id)
         if not dataset:
             return False
 
         self.session.delete(dataset)
-        self.session.commit()
+        await self.session.commit()
         return True
 
-    def get_with_files(self, dataset_id: str) -> Optional[ComposalDataset]:
+    async def get_with_files(self, dataset_id: str) -> Optional[ComposalDataset]:
         """Get dataset with files loaded"""
-        dataset = self.get_by_id(dataset_id)
+        dataset = await self.get_by_id(dataset_id)
         if dataset:
             _ = dataset.dataset_files
         return dataset
@@ -106,10 +114,10 @@ class DatasetRepository:
 class DatasetFileRepository:
     """Repository for DatasetFile operations"""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: AsyncSession):
         self.session = session
 
-    def create(
+    async def create_dataset_file(
         self,
         parent_dataset_id: str,
         file_path: str,
@@ -117,7 +125,7 @@ class DatasetFileRepository:
         file_type: Optional[str] = None,
         sample_count: int = 0
     ) -> DatasetFile:
-        """Create a new dataset file"""
+        """Create a new dataset file entry (individual file within a composal dataset)"""
         dataset_file = DatasetFile(
             parent_dataset_id=parent_dataset_id,
             file_path=file_path,
@@ -126,44 +134,48 @@ class DatasetFileRepository:
             sample_count=sample_count
         )
         self.session.add(dataset_file)
-        self.session.commit()
-        self.session.refresh(dataset_file)
+        await self.session.commit()
+        await self.session.refresh(dataset_file)
         return dataset_file
 
-    def get_by_id(self, file_id: str) -> Optional[DatasetFile]:
+    async def get_by_id(self, file_id: str) -> Optional[DatasetFile]:
         """Get dataset file by ID"""
-        return self.session.get(DatasetFile, file_id)
+        return await self.session.get(DatasetFile, file_id)
 
-    def get_by_dataset(self, dataset_id: str) -> List[DatasetFile]:
+    async def get_by_dataset(self, dataset_id: str) -> List[DatasetFile]:
         """Get all files for a dataset"""
         statement = select(DatasetFile).where(
             DatasetFile.parent_dataset_id == dataset_id
         )
-        return list(self.session.exec(statement).all())
+        result = await self.session.execute(statement)
+        return list(result.scalars().all())
 
-    def get_by_phase(self, phase_id: str) -> List[DatasetFile]:
+    async def get_by_phase(self, phase_id: str) -> List[DatasetFile]:
         """Get all files for a phase"""
         statement = select(DatasetFile).where(
             DatasetFile.phase_id == phase_id
         )
-        return list(self.session.exec(statement).all())
+        result = await self.session.execute(statement)
+        return list(result.scalars().all())
 
-    def get_by_type(self, dataset_id: str, file_type: str) -> List[DatasetFile]:
+    async def get_by_type(self, dataset_id: str, file_type: str) -> List[DatasetFile]:
         """Get files by type for a dataset"""
         statement = select(DatasetFile).where(
             DatasetFile.parent_dataset_id == dataset_id,
             DatasetFile.file_type == file_type
         )
-        return list(self.session.exec(statement).all())
+        result = await self.session.execute(statement)
+        return list(result.scalars().all())
 
-    def get_by_path(self, file_path: str) -> Optional[DatasetFile]:
+    async def get_by_path(self, file_path: str) -> Optional[DatasetFile]:
         """Get dataset file by path"""
         statement = select(DatasetFile).where(
             DatasetFile.file_path == file_path
         )
-        return self.session.exec(statement).first()
+        result = await self.session.execute(statement)
+        return result.scalars().first()
 
-    def update(
+    async def update(
         self,
         file_id: str,
         file_path: Optional[str] = None,
@@ -171,7 +183,7 @@ class DatasetFileRepository:
         sample_count: Optional[int] = None
     ) -> Optional[DatasetFile]:
         """Update dataset file"""
-        dataset_file = self.get_by_id(file_id)
+        dataset_file = await self.get_by_id(file_id)
         if not dataset_file:
             return None
 
@@ -183,27 +195,27 @@ class DatasetFileRepository:
             dataset_file.sample_count = sample_count
 
         self.session.add(dataset_file)
-        self.session.commit()
-        self.session.refresh(dataset_file)
+        await self.session.commit()
+        await self.session.refresh(dataset_file)
         return dataset_file
 
-    def delete(self, file_id: str) -> bool:
+    async def delete(self, file_id: str) -> bool:
         """Delete dataset file"""
-        dataset_file = self.get_by_id(file_id)
+        dataset_file = await self.get_by_id(file_id)
         if not dataset_file:
             return False
 
         self.session.delete(dataset_file)
-        self.session.commit()
+        await self.session.commit()
         return True
 
-    def bulk_create(
+    async def bulk_create_dataset_files(
         self,
         parent_dataset_id: str,
         phase_id: str,
         files_data: List[dict]
     ) -> List[DatasetFile]:
-        """Create multiple dataset files at once"""
+        """Create multiple dataset file entries at once"""
         files = []
         for data in files_data:
             dataset_file = DatasetFile(
@@ -216,32 +228,33 @@ class DatasetFileRepository:
             files.append(dataset_file)
             self.session.add(dataset_file)
 
-        self.session.commit()
+        await self.session.commit()
         for file in files:
-            self.session.refresh(file)
+            await self.session.refresh(file)
 
         return files
 
-    def get_total_samples_by_phase(self, phase_id: str) -> int:
+    async def get_total_samples_by_phase(self, phase_id: str) -> int:
         """Get total sample count for all files in a phase"""
         statement = select(DatasetFile).where(
             DatasetFile.phase_id == phase_id
         )
-        files = self.session.exec(statement).all()
+        result = await self.session.execute(statement)
+        files = result.scalars().all()
         return sum(f.sample_count for f in files)
 
-    def get_training_files(self, dataset_id: str) -> List[DatasetFile]:
+    async def get_training_files(self, dataset_id: str) -> List[DatasetFile]:
         """Get all training files for a dataset"""
-        return self.get_by_type(dataset_id, "train")
+        return await self.get_by_type(dataset_id, "train")
 
-    def get_validation_files(self, dataset_id: str) -> List[DatasetFile]:
+    async def get_validation_files(self, dataset_id: str) -> List[DatasetFile]:
         """Get all validation files for a dataset"""
-        return self.get_by_type(dataset_id, "validation")
+        return await self.get_by_type(dataset_id, "validation")
 
-    def get_test_files(self, dataset_id: str) -> List[DatasetFile]:
+    async def get_test_files(self, dataset_id: str) -> List[DatasetFile]:
         """Get all test files for a dataset"""
-        return self.get_by_type(dataset_id, "test")
+        return await self.get_by_type(dataset_id, "test")
 
-    def get_generated_files(self, dataset_id: str) -> List[DatasetFile]:
+    async def get_generated_files(self, dataset_id: str) -> List[DatasetFile]:
         """Get all generated files for a dataset"""
-        return self.get_by_type(dataset_id, "generated")
+        return await self.get_by_type(dataset_id, "generated")

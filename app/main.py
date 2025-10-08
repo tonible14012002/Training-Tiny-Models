@@ -13,8 +13,6 @@ from app.api.dependencies import api_key_auth
 from app.api.routes import health, workflow
 from app.api.routes import v2 as routes_v2
 from app.core.settings import settings, RELOAD_DIRS
-from app.core import services
-from app.core.schemas.workflow import PAYMENT_LABEL_V2
 
 from src.payment_classifier.llm.litellm import LiteLLMProvider
 from src.payment_classifier.llm.settings import LLMSettings
@@ -28,7 +26,6 @@ async def lifespan(app: FastAPI):
     """Application lifespan manager."""
     # Initialize resources before the app starts
     logger.info("Starting up fine-tuning workflow API...")
-    label_config = PAYMENT_LABEL_V2
 
     # Store settings in app state
     app.state.settings = settings
@@ -40,7 +37,6 @@ async def lifespan(app: FastAPI):
         pool_recycle=3600,
         pool_size=5,
         max_overflow=10,
-        connect_args={"statement_cache_size": 0},
     )
 
     teacher_llm = LiteLLMProvider(LLMSettings(
@@ -50,34 +46,24 @@ async def lifespan(app: FastAPI):
         num_retries=2,
     ))
 
+    categorizer_llm = LiteLLMProvider(LLMSettings(
+        llm_model_name="gpt-4.1",
+        api_key=settings.OPENAI_API_KEY,
+        temperature=0.3,
+        num_retries=2,
+    ))
 
     prompt_mgr = InmemoryPromptManager()
 
-    logger.info("Initializing data manager...")
-    data_manager = services.DataManager(label_config)
-
-    logger.info("Initializing data generator v2...")
-    data_generator_v2 = services.DataGeneratorV2(
-        llm=teacher_llm,
-        prompt_mgr=prompt_mgr,
-        data_manager=data_manager,
-    )
-
-    trainer_service =  services.TrainerService(
-        base_model="prajjwal1/bert-tiny",
-        label_config=label_config
-    )
-
-    logger.info("Initializing training orchestrator...")
+    logger.info("Initializing shared services...")
 
     # Store database engine for session creation
     app.state.engine = engine
 
-    app.state.data_manager = data_manager
-    app.state.data_generator_v2 = data_generator_v2
-    app.state.trainer_service = trainer_service
+    # Store shared services (services that don't depend on label_config)
+    app.state.teacher_llm = teacher_llm
     app.state.prompt_mgr = prompt_mgr
-    app.state.label_config = label_config
+    app.state.categorizer_llm = categorizer_llm
 
     logger.info("Application startup complete.")
 
