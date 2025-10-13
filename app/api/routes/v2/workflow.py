@@ -15,7 +15,7 @@ import json
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/workflow", tags=["workflow"])
+router = APIRouter(prefix="/workflow")
 
 def load_human_seed(label_config):
     with open("./.cache/human_seed.json", "r") as f:
@@ -81,7 +81,6 @@ async def create_pipeline(
         }
     }
 
-
 @router.get("/pipelines")
 async def list_pipelines(
     db: AsyncSession = Depends(get_db_session),
@@ -118,20 +117,8 @@ async def convert_to_onnx(
     db: AsyncSession = Depends(get_db_session),
     request: Request = None,
 ):
-    # Merge the models
-    # from optimum.onnxruntime import ORTModelForSequenceClassification
-    # from transformers import AutoTokenizer
-    # model = ORTModelForSequenceClassification.from_pretrained(
-    #     path, 
-    #     export=True,
-    # )
-    # model.save_pretrained(path)
-
     return {
-        "message": f"Model converted and saved to {path}",
-        "data":{
-            "saved_path": path + "/onnx/model.onnx"
-        }
+        "message": "Not implemented yet",
     }
 
 @router.post("/phase/first-gen")
@@ -140,13 +127,19 @@ async def first_generation(
     db: AsyncSession = Depends(get_db_session),
     request: Request = None,
 ):
+    '''
+    1. Create 1st phase in the pipeline
+    2. Generate initial dataset using DataGeneratorV2
+    3. Save dataset file, composal dataset file
+    4. Return phase info, dataset file info
+    '''
     # Fetch pipeline and label config from database
     pipeline = await repos.PipelineRepository(db).get_by_id(pipeline_id=pipeline_id)
 
     if not pipeline or not pipeline.label_configs:
         return {"error": "Pipeline or label config not found"}
     
-    # Create new initial phase
+    # Create new iteration phase
     phase = await repos.PhaseRepository(db).create(
         pipeline_id=pipeline.id,
         status=schemas.PHASE_STATUS.IN_PROGRESS,
@@ -189,9 +182,10 @@ async def first_generation(
     composal_file_path = composal_dir / f'composal_ds.jsonl'
     shutil.copy2(source_path, composal_file_path)
 
-    # Create Dataset File
+    # Create Dataset File with phase_id
     base_ds = await repos.DatasetRepository(db).create_composal_ds(
         pipeline_id=pipeline.id,
+        phase_id=phase.id,
         name=f"{pipeline.name} Composal Dataset",
         description="Composal Dataset for pipeline",
         file_path=str(composal_file_path),
@@ -269,7 +263,6 @@ async def test_first_generation(
         }
     }
 
-
 @router.post("/phase/train/test")
 async def test_train_model(
     payload: schemas.TestTrainPhaseRequest,
@@ -307,7 +300,6 @@ async def test_train_model(
             "checkpoint_path": path
         }
     }
-
 
 @router.post("/evaluation/test")
 async def test_evaluation(
@@ -352,13 +344,18 @@ async def test_evaluation(
         }
     }
 
-
 @router.post("/phase/train")
 async def train_model(
     payload: schemas.StartTrainPhase,
     db: AsyncSession = Depends(get_db_session),
     request: Request = None,
 ):
+    '''
+    1. Load Datasets from generation Phase
+    2. Train model using TrainerService
+    3. TrainedRepository - save trained model info, ref DatasetFile, Phase
+    4. Return trained model info
+    '''
     phase = await repos.PhaseRepository(db).get_by_id(payload.phase_id)
     if not phase:
         return {"error": "Phase not found"}
@@ -407,6 +404,13 @@ async def evaluate_human_set(
     db: AsyncSession = Depends(get_db_session),
     request: Request = None,
 ):
+    '''
+    1. Load frozen test set
+    2. Load trained model for the phase
+    3. Evaluate on frozen test set
+    4. Evaluate on training pool for low confidence samples
+    '''
+
     phase = await repos.PhaseRepository(db).get_by_id(payload.phase_id)
     if not phase:
         return {"error": "Phase not found"}
@@ -466,66 +470,13 @@ async def evaluate_human_set(
     resp["label_metrics"] = json.loads(resp["label_metrics"])
 
     # Fetch previous phase evaluation
-    phases = await repos.PhaseRepository(db).get_by_pipeline(pipeline.id)
-    prev_phases = [p for p in phases if p.phase_number < phase.phase_number]
-
-    if prev_phases:
-        # Get latest K previous phases (max 4)
-        K = 4
-        latest_prev_phases = sorted(prev_phases, key=lambda x: x.phase_number, reverse=True)[:K]
-        prev_phase_ids = [p.id for p in latest_prev_phases]
-
-        # Get trained models for these phases
-        trained_model_repo = repos.TrainedModelRepository(db)
-        phase_to_model = await trained_model_repo.get_latest_by_phase_ids(prev_phase_ids)
-
-        # Get trained model IDs
-        trained_model_ids = [model.id for model in phase_to_model.values() if model is not None]
-
-        if trained_model_ids:
-            # Get evaluations for these models
-            eval_repo = repos.EvaluationResultRepository(db)
-            model_to_eval = await eval_repo.get_latest_by_trained_model_ids(trained_model_ids)
-
-            # Calculate improvement metrics
-            improvements = []
-            for prev_phase in latest_prev_phases:
-                prev_model = phase_to_model.get(prev_phase.id)
-                if prev_model:
-                    prev_eval = model_to_eval.get(prev_model.id)
-                    if prev_eval:
-                        improvements.append({
-                            "phase_number": prev_phase.phase_number,
-                            "accuracy_delta": eval_info.accuracy - prev_eval.accuracy if prev_eval.accuracy else None,
-                            "precision_delta": eval_info.precision - prev_eval.precision if prev_eval.precision else None,
-                            "recall_delta": eval_info.recall - prev_eval.recall if prev_eval.recall else None,
-                            "f1_delta": eval_info.f1_score - prev_eval.f1_score if prev_eval.f1_score else None,
-                        })
-
-            resp["improvement"] = {
-                "improvements": improvements,
-                "should_stop": False,
-                "reason": None
-            }
-        else:
-            resp["improvement"] = {
-                "improvements": [],
-                "should_stop": False,
-                "reason": "No previous trained models found"
-            }
-
-    else:
-        resp["improvement"] = {
-            "improvements": [],
-            "should_stop": False,
-            "reason": "First phase"
-        }
+    # phases = await repos.PhaseRepository(db).get_by_pipeline(pipeline.id)
+    # prev_phases = [p for p in phases if p.phase_number < phase.phase_number]
 
     return {
         "message": "Evaluation completed",
         "data": resp,
     }
-
 
 @router.post("/classify-error")
 async def classify_errors(
@@ -533,6 +484,15 @@ async def classify_errors(
     db: AsyncSession = Depends(get_db_session),
     payload: schemas.ClassifyErrorRequest = None,
 ):
+    '''
+    1. Load error samples from latest evaluation
+    2. Load error buckets from database
+    3. Use ErrorCategorizer to categorize errors into buckets
+    4. Save categorized errors into PhaseErrorBucket
+    5. Return categorized error buckets
+    6. Return error count map, examples map
+    '''
+
     categorizer_llm = request.app.state.categorizer_llm
 
     prompt_mgr = request.app.state.prompt_mgr
@@ -746,5 +706,207 @@ async def generate_error_bucket_samples(
         "data": {
             "error_buckets": error_buckets,
             "fix_generation_config": generation_config,
+        }
+    }
+
+# UI
+@router.get("/pipelines/{pipeline_id}")
+async def pipeline_detail(
+    pipeline_id: str,
+    db: AsyncSession = Depends(get_db_session),
+    include_composal_datasets: bool = True,
+    include_dataset_files: bool = True,
+    include_error_buckets: bool = False
+):
+    '''
+    Pipeline info with all nested relationships
+
+    Query Parameters:
+        include_composal_datasets: Include composal datasets for each phase (default: True)
+        include_dataset_files: Include dataset files for each phase (default: True)
+        include_error_buckets: Include error buckets for each phase (default: False)
+
+    Response includes:
+        1. Label Config
+        2. Phases with nested relationships (based on query params):
+           - ComposalDatasets
+           - DatasetFiles
+           - TrainedModels
+           - EvaluationResults
+    '''
+
+    # Fetch pipeline with phases and requested relationships prefetched
+    pipeline = await repos.PipelineRepository(db).get_with_phases(
+        pipeline_id,
+        include_phase_composal_datasets=include_composal_datasets,
+        include_phase_dataset_files=include_dataset_files,
+        include_phase_error_buckets=include_error_buckets
+    )
+
+    if not pipeline:
+        return {"error": "Pipeline not found"}
+
+    # Transform pipeline basic info
+    pipeline_detail = pipeline.model_dump()
+
+    # Process label config
+    if pipeline.label_configs:
+        pipeline_detail["label_config"] = pipeline.label_configs[0].model_dump()
+        pipeline_detail["label_config"]["id2label"] = pipeline.label_configs[0].get_id2label()
+        pipeline_detail["label_config"]["label2id"] = pipeline.label_configs[0].get_label2id()
+        pipeline_detail["label_config"]["label_explanation"] = pipeline.label_configs[0].get_label_explanation()
+    else:
+        pipeline_detail["label_config"] = None
+
+    # Process phases with all nested relationships
+    phases_detail = []
+    if pipeline.phases:
+        for phase in pipeline.phases:
+            phase_data = phase.model_dump()
+
+            # Composal datasets and dataset files are already prefetched if requested
+            if include_composal_datasets and hasattr(phase, 'composal_datasets'):
+                phase_data["composal_datasets"] = [ds.model_dump() for ds in phase.composal_datasets]
+            elif include_composal_datasets:
+                # Fallback if not prefetched
+                composal_datasets = await repos.DatasetRepository(db).get_by_phase(phase.id)
+                phase_data["composal_datasets"] = [ds.model_dump() for ds in composal_datasets]
+
+            if include_dataset_files and hasattr(phase, 'dataset_files'):
+                phase_data["dataset_files"] = [df.model_dump() for df in phase.dataset_files]
+            elif include_dataset_files:
+                # Fallback if not prefetched
+                dataset_files = await repos.DatasetFileRepository(db).get_by_phase(phase.id)
+                phase_data["dataset_files"] = [df.model_dump() for df in dataset_files]
+
+            if include_error_buckets and hasattr(phase, 'phase_error_buckets'):
+                phase_data["phase_error_buckets"] = [peb.model_dump() for peb in phase.phase_error_buckets]
+
+            # Fetch trained models for this phase (always included)
+            trained_models = await repos.TrainedModelRepository(db).get_by_phase(phase.id)
+            phase_data["trained_models"] = []
+
+            for trained_model in trained_models:
+                trained_model_data = trained_model.model_dump()
+
+                # Parse training_params if exists
+                if trained_model.training_params:
+                    trained_model_data["training_params"] = trained_model.get_training_params()
+
+                # Fetch evaluation results for this trained model
+                evaluation_results = await repos.EvaluationResultRepository(db).get_by_trained_model(trained_model.id)
+                trained_model_data["evaluation_results"] = []
+
+                for eval_result in evaluation_results:
+                    eval_data = eval_result.model_dump()
+                    # Parse JSON fields
+                    if eval_result.label_metrics:
+                        eval_data["label_metrics"] = eval_result.get_label_metrics()
+                    if eval_result.metrics:
+                        eval_data["metrics"] = eval_result.get_metrics()
+                    trained_model_data["evaluation_results"].append(eval_data)
+
+                phase_data["trained_models"].append(trained_model_data)
+
+            phases_detail.append(phase_data)
+
+    pipeline_detail["phases"] = phases_detail
+
+    return {
+        "data": pipeline_detail,
+    }
+
+@router.get("/pipelines/{pipeline_id}/testset")
+async def get_testset(
+    pipeline_id: str,
+    db: AsyncSession = Depends(get_db_session),
+    cache_path: str = ".cache"
+):
+    '''
+    Get the loaded test set for a pipeline
+    Returns data in a schema similar to DatasetFile model
+
+    Args:
+        pipeline_id: Pipeline ID (currently ignored, returns default frozen test set)
+        cache_path: Path to cache directory containing frozen_test_set.json
+
+    Returns:
+        Test set data structured like DatasetFile model with samples
+    '''
+    # Load frozen test set from cache
+    frozen_set_path = f"{cache_path}/frozen_test_set.json"
+
+    try:
+        with open(frozen_set_path, "r") as f:
+            frozen_set = json.loads(f.read())
+
+        # Get label distribution
+        label_counts = {}
+        for sample in frozen_set:
+            label = sample.get("label")
+            if isinstance(label, int):
+                label = str(label)
+            label_counts[label] = label_counts.get(label, 0) + 1
+
+        # Return with DatasetFile-like schema
+        from datetime import datetime
+        return {
+            "message": "Test set loaded successfully",
+            "data": {
+                "id": "frozen_test_set",  # Static ID for frozen test set
+                "parent_dataset_id": None,  # No parent dataset
+                "file_path": frozen_set_path,
+                "phase_id": None,  # Not associated with a phase
+                "file_type": "test",  # Type: test
+                "sample_count": len(frozen_set),
+                "created_at": datetime.now().isoformat(),  # Current timestamp
+                "samples": frozen_set,  # Additional: actual sample data
+                "label_counts": label_counts  # Additional: label distribution
+            }
+        }
+    except FileNotFoundError:
+        return {
+            "error": f"Test set file not found at {frozen_set_path}",
+            "message": "Please ensure the frozen test set exists in the cache directory"
+        }
+    except json.JSONDecodeError as e:
+        return {
+            "error": f"Failed to parse test set JSON: {str(e)}",
+            "message": "The test set file may be corrupted"
+        }
+    except Exception as e:
+        return {
+            "error": f"Failed to load test set: {str(e)}",
+            "message": "An unexpected error occurred while loading the test set"
+        }
+
+@router.get("/phase/{phase_id}")
+async def view_phase_detail(
+    phase_id: str,
+    db: AsyncSession = Depends(get_db_session)
+):
+    '''
+    1. Show phase generated data
+    2. Show phase trained model
+    3. Show phase evaluation result
+    '''
+    phase = await repos.PhaseRepository(db).get_by_id(phase_id)
+    if not phase:
+        return {"error": "Phase not found"}
+    pipeline = await repos.PipelineRepository(db).get_by_id(phase.pipeline_id)
+
+    if not pipeline:
+        return {"error": "Pipeline not found"}
+
+    base_ds = (await repos.DatasetRepository(db).get_by_pipeline(pipeline.id))[0]
+    ds_files = await repos.DatasetFileRepository(db).get_by_dataset(base_ds.id)
+
+    return {
+        "message": "Not implemented yet",
+        "data": {
+            "phase": phase.model_dump(),
+            "pipeline": pipeline.model_dump(),
+            "base_dataset": base_ds.model_dump() if base_ds else None,
+            "dataset_files": [f.model_dump() for f in ds_files] if ds_files else [],
         }
     }

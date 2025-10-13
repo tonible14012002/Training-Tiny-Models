@@ -64,12 +64,39 @@ class PipelineRepository:
         await self.session.commit()
         return True
 
-    async def get_with_phases(self, pipeline_id: str) -> Optional[Pipeline]:
-        """Get pipeline with all phases"""
-        statement = select(Pipeline).where(Pipeline.id == pipeline_id).options(
-            selectinload(Pipeline.phases),
-            selectinload(Pipeline.label_configs)
-        )
+    async def get_with_phases(
+        self,
+        pipeline_id: str,
+        include_phase_composal_datasets: bool = False,
+        include_phase_dataset_files: bool = False,
+        include_phase_error_buckets: bool = False
+    ) -> Optional[Pipeline]:
+        """
+        Get pipeline with all phases and optional phase relationships
+
+        Args:
+            pipeline_id: The pipeline ID
+            include_phase_composal_datasets: Whether to prefetch composal datasets for each phase
+            include_phase_dataset_files: Whether to prefetch dataset files for each phase
+            include_phase_error_buckets: Whether to prefetch error buckets for each phase
+
+        Returns:
+            Pipeline with phases and requested relationships loaded
+        """
+        options = [
+            selectinload(Pipeline.label_configs),
+            selectinload(Pipeline.phases)
+        ]
+
+        # Add nested phase relationships as separate options
+        if include_phase_composal_datasets:
+            options.append(selectinload(Pipeline.phases).selectinload(PipelinePhase.composal_datasets))
+        if include_phase_dataset_files:
+            options.append(selectinload(Pipeline.phases).selectinload(PipelinePhase.dataset_files))
+        if include_phase_error_buckets:
+            options.append(selectinload(Pipeline.phases).selectinload(PipelinePhase.phase_error_buckets))
+
+        statement = select(Pipeline).where(Pipeline.id == pipeline_id).options(*options)
         result = await self.session.execute(statement)
         return result.scalars().first()
 

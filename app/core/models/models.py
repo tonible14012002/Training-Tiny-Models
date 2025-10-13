@@ -75,6 +75,7 @@ class PipelinePhase(SQLModel, table=True):
 
     # Relationships
     pipeline: Pipeline = Relationship(back_populates="phases")
+    composal_datasets: List["ComposalDataset"] = Relationship(back_populates="phase")
     dataset_files: List["DatasetFile"] = Relationship(back_populates="phase")
     phase_error_buckets: List["PhaseErrorBucket"] = Relationship(back_populates="phase")
 
@@ -85,6 +86,7 @@ class ComposalDataset(SQLModel, table=True):
 
     id: str = Field(default_factory=generate_uuid, primary_key=True)
     pipeline_id: str = Field(foreign_key="pipeline.id")
+    phase_id: Optional[str] = Field(default=None, foreign_key="pipeline_phase.id")  # Phase that generated this composal dataset
     name: Optional[str] = Field(default=None, max_length=255)
     description: Optional[str] = Field(default=None)
     file_path: Optional[str] = Field(default=None)  # Path to the combined dataset file
@@ -93,6 +95,7 @@ class ComposalDataset(SQLModel, table=True):
 
     # Relationships
     pipeline: Pipeline = Relationship(back_populates="datasets")
+    phase: Optional["PipelinePhase"] = Relationship(back_populates="composal_datasets")
     dataset_files: List["DatasetFile"] = Relationship(back_populates="parent_dataset")
 
 

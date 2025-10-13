@@ -10,13 +10,15 @@ from fastapi.responses import ORJSONResponse
 from starlette.exceptions import HTTPException
 
 from app.api.dependencies import api_key_auth
-from app.api.routes import health, workflow
+from app.api.routes import health
 from app.api.routes import v2 as routes_v2
 from app.core.settings import settings, RELOAD_DIRS
 
 from src.payment_classifier.llm.litellm import LiteLLMProvider
 from src.payment_classifier.llm.settings import LLMSettings
 from src.payment_classifier.prompts import InmemoryPromptManager
+
+import argparse
 
 logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL))
 logger = logging.getLogger(__name__)
@@ -123,15 +125,28 @@ app.add_exception_handler(RequestValidationError, request_validation_exception_h
 
 # Include routers
 app.include_router(health.router)
-app.include_router(workflow.router)
+# app.include_router(workflow.router, prefix="/v1", tags=["workflow"])
 app.include_router(routes_v2.workflow.router, prefix="/v2", tags=["v2"])
 
 
 if __name__ == "__main__":
+    # Parse the params from command line
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--host", type=str, default="0.0.0.0")
+    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--workers", type=int, default=4)
+
+    args = parser.parse_args()
+
+    host = args.host or "0.0.0.0"
+    port = args.port or 8000
+    workers = args.workers or 4
+
     uvicorn.run(
         "main:app",
-        host="0.0.0.0",
-        port=8000,
+        host=host,
+        workers=workers,
+        port=port,
         reload=settings.ENVIRONMENT == "dev",
         reload_dirs=RELOAD_DIRS,
     )

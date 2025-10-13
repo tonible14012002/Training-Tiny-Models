@@ -14,6 +14,7 @@ class DatasetRepository:
     async def create_composal_ds(
         self,
         pipeline_id: str,
+        phase_id: Optional[str] = None,
         name: Optional[str] = None,
         description: Optional[str] = None,
         file_path: Optional[str] = None,
@@ -22,6 +23,7 @@ class DatasetRepository:
         """Create a new composal dataset (collection/container for dataset files)"""
         dataset = ComposalDataset(
             pipeline_id=pipeline_id,
+            phase_id=phase_id,
             name=name,
             description=description,
             file_path=file_path,
@@ -109,6 +111,14 @@ class DatasetRepository:
         if dataset:
             _ = dataset.dataset_files
         return dataset
+
+    async def get_by_phase(self, phase_id: str) -> List[ComposalDataset]:
+        """Get all composal datasets for a phase"""
+        statement = select(ComposalDataset).where(
+            ComposalDataset.phase_id == phase_id
+        ).order_by(ComposalDataset.created_at.desc())
+        result = await self.session.execute(statement)
+        return list(result.scalars().all())
 
 
 class DatasetFileRepository:
