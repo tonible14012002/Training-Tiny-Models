@@ -294,6 +294,24 @@ class StartPhaseRequest(BaseModel):
         description="Optional phase ID to resume. If not provided, a new phase is started."
     )
 
+class TestTrainPhaseRequest(BaseModel):
+    phase_id: str = Field(
+        ...,
+        description="The ID of the phase to test training"
+    )
+    ds_file_path: str = Field(
+        ...,
+        description="Path to the dataset file for training"
+    )
+    checkpoint_path: str = Field(
+        default=".checkpoints",
+        description="Base path for saving model checkpoints"
+    )
+    cache_path: str = Field(
+        default=".cache",
+        description="Base path for caching data"
+    )
+
 class StartTrainPhase(BaseModel):
     phase_id: str = Field(
         ...,
@@ -314,6 +332,30 @@ class StartErrBucketPhaese(BaseModel):
     phase_id: str = Field(
         ...,
         description="The ID of the phase to classify error buckets"
+    )
+
+class TestEvaluationRequest(BaseModel):
+    model_path: str = Field(
+        ...,
+        description="Path to the trained model checkpoint"
+    )
+    pipeline_id: str = Field(
+        ...,
+        description="The ID of the pipeline (used to get label configuration)"
+    )
+    cache_path: str = Field(
+        default=".cache",
+        description="Base path for caching data"
+    )
+
+class TestFirstGenRequest(BaseModel):
+    pipeline_id: str = Field(
+        ...,
+        description="The ID of the pipeline (used to get label configuration)"
+    )
+    cache_path: str = Field(
+        default=".cache",
+        description="Base path for caching data and output"
     )
 
 class PHASE_STATUS:

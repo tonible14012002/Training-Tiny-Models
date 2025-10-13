@@ -38,26 +38,6 @@ def _detect_inference_type(checkpoint_path: str) -> str:
     # Default to prob for backward compatibility
     return "prob"
 
-@router.post("/train")
-async def train_student_model(request: Request, inference_type: str = "prob"):
-    """Train model with specified inference type (adb or prob)"""
-    data_manager: services.DataManager = request.app.state.data_manager
-    trainer_service: services.TrainerService = request.app.state.trainer_service
-
-    if inference_type not in ["adb", "prob"]:
-        return {
-            "status": "error",
-            "message": "inference_type must be 'adb' or 'prob'"
-        }
-
-    ds = data_manager.to_datasets()
-    checkpoint_num = await trainer_service.train(ds, inference_type=inference_type)
-
-    return {
-        "status": "completed",
-        "checkpoint_number": checkpoint_num,
-        "inference_type": inference_type
-    }
 
 @router.post("/continual-train")
 async def continual_train_model(

@@ -31,8 +31,9 @@ def load_human_seed(label_config):
     return human_samples
 
 
-def load_frozen_set(label_config):
-    with open("./.cache/frozen_test_set.json", "r") as f:
+def load_frozen_set(label_config, cache_path=".cache"):
+    frozen_set_path = f"{cache_path}/frozen_test_set.json"
+    with open(frozen_set_path, "r") as f:
         frozen_set = json.loads(f.read())
 
     eval_ds = DatasetHelper.json_to_ds(
@@ -118,13 +119,13 @@ async def convert_to_onnx(
     request: Request = None,
 ):
     # Merge the models
-    from optimum.onnxruntime import ORTModelForSequenceClassification
-    from transformers import AutoTokenizer
-    model = ORTModelForSequenceClassification.from_pretrained(
-        path, 
-        export=True,
-    )
-    model.save_pretrained(path)
+    # from optimum.onnxruntime import ORTModelForSequenceClassification
+    # from transformers import AutoTokenizer
+    # model = ORTModelForSequenceClassification.from_pretrained(
+    #     path, 
+    #     export=True,
+    # )
+    # model.save_pretrained(path)
 
     return {
         "message": f"Model converted and saved to {path}",
@@ -211,6 +212,146 @@ async def first_generation(
             "ds_file": ds_file.model_dump(),
         }
     }
+
+@router.post("/test/first-gen")
+async def test_first_generation(
+    payload: schemas.TestFirstGenRequest,
+    db: AsyncSession = Depends(get_db_session),
+    request: Request = None,
+):
+    """Test endpoint for first generation without database mutations"""
+    # Fetch pipeline and label config from database (read-only)
+    pipeline = await repos.PipelineRepository(db).get_by_id(pipeline_id=payload.pipeline_id)
+
+    if not pipeline or not pipeline.label_configs:
+        return {"error": "Pipeline or label config not found"}
+
+    label_config = pipeline.label_configs[0]  # Get the first label config
+
+    # Create DataManager and DataGeneratorV2 instances for testing
+    data_manager = services.DataManager(
+        label_config=label_config,
+        rouge_threshold=0.6,
+        base_dir=f'{payload.cache_path}/test/first-gen/{payload.pipeline_id}'
+    )
+
+    data_generator_v2 = services.DataGeneratorV2(
+        llm=request.app.state.teacher_llm,
+        prompt_mgr=request.app.state.prompt_mgr,
+        data_manager=data_manager,
+    )
+
+    human_seeds = load_human_seed(label_config)
+
+    # Create dict for label counts
+    label_count_dict = label_config.get_label2id()
+    for key in label_count_dict:
+        label_count_dict[key] = 0
+    label_count_dict["open_intent"] = 3000
+
+    # Generate data
+    data_generator_v2.SEED_PROMPT_KEY = "v2/train/seed_open_intent"
+    generated, path = await data_generator_v2.fresh_gen_v2(
+        human_seeds=human_seeds,
+        expect_total_each_label=label_count_dict
+    )
+
+    return {
+        "message": f"Test generation completed: {len(generated)} samples",
+        "data": {
+            "sample_count": len(generated),
+            "file_path": path,
+            "cache_path": payload.cache_path,
+            "label_counts": {
+                label: sum(1 for s in generated if s.label == label)
+                for label in label_config.get_id2label().values()
+            }
+        }
+    }
+
+
+@router.post("/phase/train/test")
+async def test_train_model(
+    payload: schemas.TestTrainPhaseRequest,
+    db: AsyncSession = Depends(get_db_session),
+    request: Request = None,
+):
+    phase = await repos.PhaseRepository(db).get_by_id(payload.phase_id)
+    if not phase:
+        return {"error": "Phase not found"}
+
+    pipeline = await repos.PipelineRepository(db).get_by_id(phase.pipeline_id)
+    if not pipeline or not pipeline.label_configs:
+        return {"error": "Pipeline or label config not found"}
+    label_config = pipeline.label_configs[0]  # Get the first label config
+
+    data_mgr = services.DataManager(
+        label_config=label_config,
+        rouge_threshold=0.6,
+        base_dir=f'{payload.cache_path}/test/{payload.phase_id}'
+    )
+
+    ds = data_mgr.to_datasets(file_path=payload.ds_file_path)
+
+    trainer = services.TrainerService(
+        base_model="prajjwal1/bert-tiny",
+        label_config=label_config,
+        base_dir=f'{payload.checkpoint_path}/test/{payload.phase_id}',
+    )
+
+    path = await trainer.train(ds, return_full_path=True)
+
+    return {
+        "message": "Test training completed",
+        "data": {
+            "checkpoint_path": path
+        }
+    }
+
+
+@router.post("/evaluation/test")
+async def test_evaluation(
+    payload: schemas.TestEvaluationRequest,
+    db: AsyncSession = Depends(get_db_session),
+    request: Request = None,
+):
+    """Test endpoint for model evaluation without database mutations"""
+    # Fetch pipeline and label config from database (read-only)
+    pipeline = await repos.PipelineRepository(db).get_by_id(pipeline_id=payload.pipeline_id)
+    if not pipeline or not pipeline.label_configs:
+        return {"error": "Pipeline or label config not found"}
+
+    label_config = pipeline.label_configs[0]  # Get the first label config
+
+    # Load frozen test set
+    eval_ds = load_frozen_set(label_config, cache_path=payload.cache_path)
+
+    # Create inference model
+    inferencer = ProbModelInference(
+        peft_path=payload.model_path,
+        label_config=label_config,
+    )
+
+    # Evaluate the model
+    eval_output = inferencer.evaluate(
+        eval_ds,
+        get_low_confidence=True,
+        get_error_samples=True,
+        confidence_threshold=0.5
+    )
+
+    return {
+        "message": "Test evaluation completed",
+        "data": {
+            "model_path": payload.model_path,
+            "cache_path": payload.cache_path,
+            "overall_metrics": eval_output.get("overall", {}),
+            "per_label_metrics": eval_output.get("per_label", {}),
+            "error_samples_count": len(eval_output.get("error_samples", {}).get("samples", [])),
+            "low_confidence_count": len(eval_output.get("low_confidence_correct", {}).get("samples", [])),
+        }
+    }
+
 
 @router.post("/phase/train")
 async def train_model(

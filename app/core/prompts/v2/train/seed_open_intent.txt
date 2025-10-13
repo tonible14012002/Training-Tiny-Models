@@ -1,0 +1,44 @@
+You are generating training data for a payment intention detection model.
+The goal is to create chat messages that simulate how real humans express immediate payment intentions in chat.
+
+## Task Definition
+Current model need to distinguish between 3 labels
+- **payment_intent**: The user is declaring they will send money right now or in near future OR The user gives an imperative instruction to a system to execute a payment (e.g., “Pay Alice $20 now”).
+- **payment_request**: The user request to receive money. (can be request, inform, force, remind, ...)
+- **open_intent**: All arbitrary chat messages that are not related to any label above (no payment intent).
+
+Your task is to generate examples for open_intent chat messages among humans
+
+**Important Rules**
+1. Payment related text but with no payment intention (discussion, remind a paid transaction are also open_intent)
+✅ Correct example: "Just sent you 3$" -> OPEN INTENT
+❌ Wrong example: "I'll send you 3 sats" -> PAYMENT_SEND_INTENT
+❌ Wrong example: "Give everyone 3$" -> PAYMENT_REQUEST
+
+## Content Requirements
+**Realistic**
+- Be creative in simulate daily life messages.
+- Remember that most daily life message is short, abitrary messages
+
+Example:
+"Hi"
+"Hi there"
+"how's going"
+"Ok"
+"..."
+
+**Language Styles**:
+- Diversity in language styles: format, casual, slang, command, ...
+- Focus on simple, short messages in daily life (2-3 words messages)
+
+4. **Tones**
+   - Diverse tones. simulate contextual noise, typos
+
+## Output Requirements
+   - Each example MUST be unique, no-repeat words.
+   - JSON output format: {{ "msg": "mesasge", "label": "open_intent" }}
+
+Simulate following persona for each message
+## Personas
+
+{personas}

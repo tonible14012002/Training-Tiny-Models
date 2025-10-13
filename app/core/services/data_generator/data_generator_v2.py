@@ -48,6 +48,13 @@ class DataGeneratorV2:
             label: [] for label in expect_total_each_label.keys()
         }
 
+        # Create temp file path for incremental saves
+        from datetime import datetime
+        from pathlib import Path
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        temp_file_path = Path(self.data_manager.LOCAL_FILE).parent / f"temp_gen_{timestamp}.jsonl"
+        logger.info(f"Incremental saves will be written to: {temp_file_path}")
+
         # Calculate parallel generation parameters based on total expected
         total_expected = sum(expect_total_each_label.values())
         parallel_generations, messages_per_call, _ = self._calculate_v2_generation_params(total_expected)
@@ -92,13 +99,20 @@ class DataGeneratorV2:
             new_unique = [s for s in internal_deduped if s not in all_results]
 
             # Add new unique samples to quantity tracker (only if not exceeding target)
+            added_samples = []
             added_count = 0
             for sample in new_unique:
                 if sample.label in quantity_tracker:
                     # Only add if this label hasn't reached its target yet
                     if len(quantity_tracker[sample.label]) < expect_total_each_label[sample.label]:
                         quantity_tracker[sample.label].append(sample)
+                        added_samples.append(sample)
                         added_count += 1
+
+            # Save newly added samples to temp file incrementally
+            if added_samples:
+                self._append_to_file(temp_file_path, added_samples)
+                logger.info(f"Saved {len(added_samples)} new samples to temp file")
 
             # Update all_results and previous_batch_results for next iteration
             all_results.extend(batch_results)
@@ -116,6 +130,8 @@ class DataGeneratorV2:
         # Use hard_save to overwrite the file with exact final samples
         self.data_manager.hard_save(final_samples)
 
+        logger.info(f"Final dataset saved to: {self.data_manager.LOCAL_FILE}, temp backup at: {temp_file_path}")
+
         return final_samples, self.data_manager.LOCAL_FILE
 
     def _is_quantity_sufficient(self, quantity_tracker: Dict[Union[str, int], List[Sample]],
@@ -129,6 +145,14 @@ class DataGeneratorV2:
     def _get_current_counts(self, quantity_tracker: Dict[Union[str, int], List[Sample]]) -> Dict[Union[str, int], int]:
         """Get current sample counts for each label"""
         return {label: len(samples) for label, samples in quantity_tracker.items()}
+
+    def _append_to_file(self, file_path, samples: List[Sample]):
+        """Append samples to a file in JSONL format"""
+        import json
+        with open(file_path, 'a', encoding='utf-8') as f:
+            for sample in samples:
+                json.dump({"msg": sample.msg, "label": sample.label}, f, ensure_ascii=False)
+                f.write('\n')
         
     async def iterative_gen(self, human_seeds: List[Sample], prompt: str, parallel_generations: int = None, total_message_per_batch: int = None, total_batches: int = None, track_saved: bool = False) -> tuple[List[Sample], List[Sample]] | List[Sample]:
         """Core generation logic that can be reused with different prompts
