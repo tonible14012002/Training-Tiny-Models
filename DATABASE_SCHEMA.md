@@ -12,7 +12,6 @@ erDiagram
     Pipeline ||--o{ ErrorBucket : "pipeline_id"
     Pipeline ||--o| HumanTestSet : "pipeline_id (nullable)"
 
-    PipelinePhase ||--o| PipelinePhase : "previous_phase_id (nullable)"
     PipelinePhase ||--o{ ComposalDataset : "phase_id (nullable)"
     PipelinePhase ||--o{ DatasetFile : "phase_id"
     PipelinePhase ||--o{ PhaseErrorBucket : "phase_id"
@@ -50,7 +49,7 @@ erDiagram
     PipelinePhase {
         string id PK
         string pipeline_id FK
-        string previous_phase_id FK
+        string phase_path
         int phase_number
         string checkpoint_id
         string checkpoint_path
@@ -164,7 +163,11 @@ The root entity representing a training pipeline. Each pipeline has its own labe
 Stores the label configuration for a pipeline, including mappings between label IDs and names, and optional explanations for each label.
 
 #### PipelinePhase
-Represents a single phase in the training pipeline. Phases are linked sequentially through `previous_phase_id`, allowing tracking of the pipeline's progression. Each phase has a status (pending, in_progress, completed, failed).
+Represents a single phase in the training pipeline. Phases are organized hierarchically through `phase_path`, which stores the chain of parent phase IDs (e.g., "" for root phases, "parent_id" for first-level children, "parent1_id/parent2_id" for deeper levels). This allows:
+- Grouping phases by their root phase (first phase in a sequence)
+- Tracking order without a separate order column
+- Supporting multiple parallel sequences starting from different root phases
+Each phase has a status (pending, in_progress, completed, failed).
 
 ### Dataset Management Tables
 
@@ -220,8 +223,8 @@ Custom human-curated test datasets that can be optionally associated with a pipe
 ### 1. Pipeline → Phases (One-to-Many)
 A pipeline progresses through multiple phases, each representing a training iteration.
 
-### 2. Phase → Phase (Self-Reference)
-Phases are linked sequentially via `previous_phase_id`, forming a chain that represents the pipeline's history.
+### 2. Phase Hierarchies (via phase_path)
+Phases are organized hierarchically via `phase_path`, forming sequences that represent the pipeline's progression. All phases with the same root phase ID (first segment of phase_path) belong to the same sequence.
 
 ### 3. Phase → ComposalDataset (One-to-Many)
 Each phase can generate multiple composal datasets (though typically one per phase for first-gen API calls).
@@ -299,7 +302,7 @@ Most relationships use `ON DELETE CASCADE`, meaning:
 
 ### Optional Relationships
 - `HumanTestSet.pipeline_id` is optional - test sets can exist independently
-- `PipelinePhase.previous_phase_id` is null for the first phase
+- `PipelinePhase.phase_path` is an empty string for root phases (the first phase in a sequence)
 - `ComposalDataset.phase_id` is optional for backward compatibility
 
 ## Indexing Strategy
@@ -310,6 +313,8 @@ The following indexes are created for performance:
 -- Foreign key indexes
 idx_label_config_pipeline ON label_config(pipeline_id)
 idx_pipeline_phase_pipeline ON pipeline_phase(pipeline_id)
+idx_pipeline_phase_path ON pipeline_phase(phase_path)
+idx_pipeline_phase_number ON pipeline_phase(phase_number)
 idx_composal_dataset_pipeline ON composal_dataset(pipeline_id)
 idx_composal_dataset_phase ON composal_dataset(phase_id)
 idx_dataset_file_parent ON dataset_file(parent_dataset_id)
@@ -322,4 +327,6 @@ idx_phase_error_bucket_bucket ON phase_error_bucket(bucket_id)
 These indexes optimize:
 - Lookups by foreign key relationships
 - Queries filtering by pipeline or phase
+- Phase hierarchy queries using phase_path
+- Phase ordering queries using phase_number
 - Joins between related tables

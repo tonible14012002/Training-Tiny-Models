@@ -60,12 +60,21 @@ class LabelConfig(SQLModel, table=True):
 
 
 class PipelinePhase(SQLModel, table=True):
-    """Pipeline phase table for tracking training phases"""
+    """Pipeline phase table for tracking training phases
+
+    The phase_path column stores the hierarchical path of parent phases:
+    - Empty string '' for base phases (phase_number = 0)
+    - 'parent_id' for first generation children
+    - 'parent1_id/parent2_id' for deeper nested phases
+
+    This allows grouping phases by their root phase (first segment) and
+    tracking order without storing a separate order column.
+    """
     __tablename__ = "pipeline_phase"
 
     id: str = Field(default_factory=generate_uuid, primary_key=True)
     pipeline_id: str = Field(foreign_key="pipeline.id")
-    previous_phase_id: Optional[str] = Field(default=None, foreign_key="pipeline_phase.id")
+    phase_path: str = Field(default="")  # Hierarchical path: "" for root, "parent_id" or "p1_id/p2_id" for children
     phase_number: int
     checkpoint_id: Optional[str] = Field(default=None, max_length=100)
     checkpoint_path: Optional[str] = Field(default=None)
@@ -78,6 +87,32 @@ class PipelinePhase(SQLModel, table=True):
     composal_datasets: List["ComposalDataset"] = Relationship(back_populates="phase")
     dataset_files: List["DatasetFile"] = Relationship(back_populates="phase")
     phase_error_buckets: List["PhaseErrorBucket"] = Relationship(back_populates="phase")
+
+    def get_parent_phase_id(self) -> Optional[str]:
+        """Get the immediate parent phase ID from phase_path"""
+        if not self.phase_path:
+            return None
+        path_parts = self.phase_path.split('/')
+        return path_parts[-1] if path_parts else None
+
+    def get_root_phase_id(self) -> Optional[str]:
+        """Get the root (first) phase ID from phase_path"""
+        if not self.phase_path:
+            return None
+        path_parts = self.phase_path.split('/')
+        return path_parts[0] if path_parts else None
+
+    def get_depth(self) -> int:
+        """Get the depth of this phase in the hierarchy (0 for root phases)"""
+        if not self.phase_path:
+            return 0
+        return len(self.phase_path.split('/'))
+
+    def build_child_path(self) -> str:
+        """Build the phase_path that a child of this phase should have"""
+        if not self.phase_path:
+            return self.id
+        return f"{self.phase_path}/{self.id}"
 
 
 class ComposalDataset(SQLModel, table=True):
@@ -114,6 +149,22 @@ class DatasetFile(SQLModel, table=True):
     # Relationships
     parent_dataset: ComposalDataset = Relationship(back_populates="dataset_files")
     phase: PipelinePhase = Relationship(back_populates="dataset_files")
+    batch_files: List["BatchGeneratedDatasetFile"] = Relationship(back_populates="parent_dataset_file")
+
+
+class BatchGeneratedDatasetFile(SQLModel, table=True):
+    """Batch generated dataset file table for tracking incremental generation batches"""
+    __tablename__ = "batch_generated_dataset_file"
+
+    id: str = Field(default_factory=generate_uuid, primary_key=True)
+    parent_dataset_file_id: str = Field(foreign_key="dataset_file.id")
+    file_path: str  # Path to the batch temp file
+    batch_number: int  # Sequential batch number (1, 2, 3, ...)
+    sample_count: int = Field(default=0)  # Number of samples in this batch
+    created_at: datetime = Field(default_factory=utc_now)
+
+    # Relationships
+    parent_dataset_file: DatasetFile = Relationship(back_populates="batch_files")
 
 
 class ErrorBucket(SQLModel, table=True):

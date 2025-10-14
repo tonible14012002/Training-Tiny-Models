@@ -12,6 +12,7 @@ __all__ = [
     "PhaseErrorBucketRepository",
     "DatasetRepository",
     "DatasetFileRepository",
+    "BatchGeneratedDatasetFileRepository",
     "TrainedModelRepository",
     "EvaluationResultRepository",
 ]

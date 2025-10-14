@@ -284,16 +284,11 @@ class ClassifyErrorRequest(BaseModel):
         description="The ID of the phase within the pipeline"
     )
 
-class StartPhaseRequest(BaseModel):
+class StartPipelineRequest(BaseModel):
     pipeline_id: str = Field(
         ...,
         description="The ID of the pipeline to start a new phase for"
     )
-    phase_id: Optional[str] = Field(
-        None,
-        description="Optional phase ID to resume. If not provided, a new phase is started."
-    )
-
 class TestTrainPhaseRequest(BaseModel):
     phase_id: str = Field(
         ...,

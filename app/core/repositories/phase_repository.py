@@ -18,16 +18,35 @@ class PhaseRepository:
         phase_number: int,
         checkpoint_id: Optional[str] = None,
         checkpoint_path: Optional[str] = None,
-        previous_phase_id: Optional[str] = None,
+        parent_phase_id: Optional[str] = None,
         status: str = "pending"
     ) -> PipelinePhase:
-        """Create a new phase"""
+        """Create a new phase
+
+        Args:
+            pipeline_id: ID of the pipeline
+            phase_number: Phase number
+            checkpoint_id: Optional checkpoint ID
+            checkpoint_path: Optional checkpoint path
+            parent_phase_id: Optional parent phase ID (will be used to build phase_path)
+            status: Phase status (default: "pending")
+
+        Returns:
+            The created PipelinePhase
+        """
+        # Build phase_path from parent
+        phase_path = ""
+        if parent_phase_id:
+            parent_phase = await self.get_by_id(parent_phase_id)
+            if parent_phase:
+                phase_path = parent_phase.build_child_path()
+
         phase = PipelinePhase(
             pipeline_id=pipeline_id,
             phase_number=phase_number,
             checkpoint_id=checkpoint_id,
             checkpoint_path=checkpoint_path,
-            previous_phase_id=previous_phase_id,
+            phase_path=phase_path,
             status=status
         )
         self.session.add(phase)
@@ -222,16 +241,31 @@ class PhaseRepository:
         return True
 
     async def get_phase_chain(self, phase_id: str) -> List[PipelinePhase]:
-        """Get the chain of phases leading to this phase"""
-        phases = []
-        current_phase = await self.get_by_id(phase_id)
+        """Get the chain of phases leading to this phase (from root to current)
 
-        while current_phase:
-            phases.insert(0, current_phase)
-            if current_phase.previous_phase_id:
-                current_phase = await self.get_by_id(current_phase.previous_phase_id)
-            else:
-                break
+        Returns phases in order from root (phase_path='') to the current phase.
+        """
+        current_phase = await self.get_by_id(phase_id)
+        if not current_phase:
+            return []
+
+        phases = []
+
+        # If phase has no path, it's a root phase
+        if not current_phase.phase_path:
+            return [current_phase]
+
+        # Get all parent phase IDs from the path
+        parent_ids = current_phase.phase_path.split('/')
+
+        # Fetch all parent phases
+        for parent_id in parent_ids:
+            parent_phase = await self.get_by_id(parent_id)
+            if parent_phase:
+                phases.append(parent_phase)
+
+        # Add the current phase at the end
+        phases.append(current_phase)
 
         return phases
 
@@ -252,3 +286,72 @@ class PhaseRepository:
         )
         result = await self.session.execute(statement)
         return result.scalars().first()
+
+    async def get_phases_by_sequence(self, pipeline_id: str, root_phase_id: str) -> List[PipelinePhase]:
+        """Get all phases in a sequence (same root phase)
+
+        Args:
+            pipeline_id: The pipeline ID
+            root_phase_id: The root phase ID (first phase in the sequence)
+
+        Returns:
+            List of phases in the sequence, ordered by phase_number
+        """
+        # Get root phase (empty phase_path)
+        root_phase = await self.get_by_id(root_phase_id)
+        if not root_phase or root_phase.phase_path != "":
+            return []
+
+        # Get all phases that start with this root phase ID in their path
+        statement = select(PipelinePhase).where(
+            PipelinePhase.pipeline_id == pipeline_id,
+            (PipelinePhase.id == root_phase_id) |
+            (PipelinePhase.phase_path.like(f"{root_phase_id}%"))
+        ).order_by(PipelinePhase.phase_number)
+
+        result = await self.session.execute(statement)
+        return list(result.scalars().all())
+
+    async def get_root_phases(self, pipeline_id: str) -> List[PipelinePhase]:
+        """Get all root phases (phase_path = '') for a pipeline
+
+        These are the starting phases of each sequence (typically phase_number = 0).
+        """
+        statement = select(PipelinePhase).where(
+            PipelinePhase.pipeline_id == pipeline_id,
+            PipelinePhase.phase_path == ""
+        ).order_by(PipelinePhase.created_at)
+
+        result = await self.session.execute(statement)
+        return list(result.scalars().all())
+
+    async def get_child_phases(self, parent_phase_id: str) -> List[PipelinePhase]:
+        """Get all nested children of a phase (not just direct children)
+
+        Args:
+            parent_phase_id: The parent phase ID
+
+        Returns:
+            List of all nested child phases, ordered by depth in hierarchy
+        """
+        parent_phase = await self.get_by_id(parent_phase_id)
+        if not parent_phase:
+            return []
+
+        # Find all phases where phase_path starts with the parent's ID
+        # This returns all nested children, not just direct children
+        # Match either exact (direct children) or starts with parent_id/ (deeper descendants)
+        statement = select(PipelinePhase).where(
+            PipelinePhase.pipeline_id == parent_phase.pipeline_id,
+            (PipelinePhase.phase_path == parent_phase_id) |
+            (PipelinePhase.phase_path.like(f"{parent_phase_id}/%"))
+        )
+
+        result = await self.session.execute(statement)
+        phases = list(result.scalars().all())
+
+        # Order by depth (number of parent IDs in phase_path)
+        # Split the path by '/' to get the list of parent IDs, then sort by length
+        phases.sort(key=lambda p: len(p.phase_path.split('/')))
+
+        return phases

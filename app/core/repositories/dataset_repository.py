@@ -2,7 +2,7 @@ from typing import Optional, List
 from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.models.models import ComposalDataset, DatasetFile
+from app.core.models.models import ComposalDataset, DatasetFile, BatchGeneratedDatasetFile
 
 
 class DatasetRepository:
@@ -268,3 +268,90 @@ class DatasetFileRepository:
     async def get_generated_files(self, dataset_id: str) -> List[DatasetFile]:
         """Get all generated files for a dataset"""
         return await self.get_by_type(dataset_id, "generated")
+
+
+class BatchGeneratedDatasetFileRepository:
+    """Repository for BatchGeneratedDatasetFile operations"""
+
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def create_batch_file(
+        self,
+        parent_dataset_file_id: str,
+        file_path: str,
+        batch_number: int,
+        sample_count: int = 0
+    ) -> BatchGeneratedDatasetFile:
+        """Create a new batch generated dataset file entry"""
+        batch_file = BatchGeneratedDatasetFile(
+            parent_dataset_file_id=parent_dataset_file_id,
+            file_path=file_path,
+            batch_number=batch_number,
+            sample_count=sample_count
+        )
+        self.session.add(batch_file)
+        await self.session.commit()
+        await self.session.refresh(batch_file)
+        return batch_file
+
+    async def get_by_id(self, batch_file_id: str) -> Optional[BatchGeneratedDatasetFile]:
+        """Get batch file by ID"""
+        return await self.session.get(BatchGeneratedDatasetFile, batch_file_id)
+
+    async def get_by_parent_file(self, parent_file_id: str) -> List[BatchGeneratedDatasetFile]:
+        """Get all batch files for a parent dataset file"""
+        statement = select(BatchGeneratedDatasetFile).where(
+            BatchGeneratedDatasetFile.parent_dataset_file_id == parent_file_id
+        ).order_by(BatchGeneratedDatasetFile.batch_number)
+        result = await self.session.execute(statement)
+        return list(result.scalars().all())
+
+    async def get_by_batch_number(
+        self,
+        parent_file_id: str,
+        batch_number: int
+    ) -> Optional[BatchGeneratedDatasetFile]:
+        """Get batch file by batch number for a parent file"""
+        statement = select(BatchGeneratedDatasetFile).where(
+            BatchGeneratedDatasetFile.parent_dataset_file_id == parent_file_id,
+            BatchGeneratedDatasetFile.batch_number == batch_number
+        )
+        result = await self.session.execute(statement)
+        return result.scalars().first()
+
+    async def update_sample_count(
+        self,
+        batch_file_id: str,
+        sample_count: int
+    ) -> Optional[BatchGeneratedDatasetFile]:
+        """Update sample count for a batch file"""
+        batch_file = await self.get_by_id(batch_file_id)
+        if not batch_file:
+            return None
+
+        batch_file.sample_count = sample_count
+
+        self.session.add(batch_file)
+        await self.session.commit()
+        await self.session.refresh(batch_file)
+        return batch_file
+
+    async def delete(self, batch_file_id: str) -> bool:
+        """Delete batch file"""
+        batch_file = await self.get_by_id(batch_file_id)
+        if not batch_file:
+            return False
+
+        self.session.delete(batch_file)
+        await self.session.commit()
+        return True
+
+    async def get_total_samples_by_parent(self, parent_file_id: str) -> int:
+        """Get total sample count for all batch files of a parent file"""
+        statement = select(BatchGeneratedDatasetFile).where(
+            BatchGeneratedDatasetFile.parent_dataset_file_id == parent_file_id
+        )
+        result = await self.session.execute(statement)
+        batch_files = result.scalars().all()
+        return sum(bf.sample_count for bf in batch_files)

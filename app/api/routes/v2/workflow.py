@@ -123,30 +123,53 @@ async def convert_to_onnx(
 
 @router.post("/phase/first-gen")
 async def first_generation(
-    pipeline_id: str = Body(..., description="The ID of the pipeline"),
+    payload: schemas.StartPipelineRequest,
     db: AsyncSession = Depends(get_db_session),
     request: Request = None,
 ):
     '''
     1. Create 1st phase in the pipeline
-    2. Generate initial dataset using DataGeneratorV2
-    3. Save dataset file, composal dataset file
-    4. Return phase info, dataset file info
+    2. Create composal dataset and dataset file records FIRST (before generation)
+    3. Generate initial dataset using DataGeneratorV2 with batch tracking
+    4. Update final dataset file path and info after generation
+    5. Return phase info, dataset file info, and batch files
     '''
     # Fetch pipeline and label config from database
-    pipeline = await repos.PipelineRepository(db).get_by_id(pipeline_id=pipeline_id)
+    pipeline = await repos.PipelineRepository(db).get_by_id(pipeline_id=payload.pipeline_id)
 
     if not pipeline or not pipeline.label_configs:
         return {"error": "Pipeline or label config not found"}
-    
+
     # Create new iteration phase
     phase = await repos.PhaseRepository(db).create(
         pipeline_id=pipeline.id,
         status=schemas.PHASE_STATUS.IN_PROGRESS,
         phase_number=0,
     )
-    
+
     label_config = pipeline.label_configs[0]  # Get the first label config
+
+    # Create composal directory
+    composal_dir = Path(f'.cache/{pipeline.id}/{phase.id}/composal')
+    composal_dir.mkdir(parents=True, exist_ok=True)
+    composal_file_path = composal_dir / f'composal_ds.jsonl'
+
+    # Create Dataset and DatasetFile records FIRST (before generation)
+    base_ds = await repos.DatasetRepository(db).create_composal_ds(
+        pipeline_id=pipeline.id,
+        phase_id=phase.id,
+        name=f"{pipeline.name} Composal Dataset",
+        description="Composal Dataset for pipeline",
+        file_path=str(composal_file_path),
+    )
+
+    ds_file = await repos.DatasetFileRepository(db).create_dataset_file(
+        parent_dataset_id=base_ds.id,
+        file_path="",  # Will be updated after generation
+        file_type="jsonl",
+        phase_id=phase.id,
+        sample_count=0  # Will be updated after generation
+    )
 
     # Create DataManager and DataGeneratorV2 instances for this pipeline
     data_manager = services.DataManager(
@@ -168,42 +191,48 @@ async def first_generation(
     for key in label_count_dict:
         label_count_dict[key] = 200
 
+    # Define callback to save each batch to database
+    async def on_batch_generated(batch_number: int, samples: list, temp_file_path: str):
+        """Callback to save batch information to database"""
+        batch_repo = repos.BatchGeneratedDatasetFileRepository(db)
+        await batch_repo.create_batch_file(
+            parent_dataset_file_id=ds_file.id,
+            file_path=temp_file_path,
+            batch_number=batch_number,
+            sample_count=len(samples)
+        )
+        logger.info(f"Saved batch {batch_number} with {len(samples)} samples to database")
+
+    # Generate with batch tracking
     generated, path = await data_generator_v2.fresh_gen_v2(
         human_seeds=human_seeds,
-        expect_total_each_label=label_count_dict
+        expect_total_each_label=label_count_dict,
+        on_batch_generated=on_batch_generated
     )
 
-    # Create composal directory and copy the dataset file
-    composal_dir = Path(f'.cache/{pipeline.id}/{phase.id}/composal')
-    composal_dir.mkdir(parents=True, exist_ok=True)
-
-    # Copy file to composal directory
+    # Copy final file to composal directory
     source_path = Path(path)
-    composal_file_path = composal_dir / f'composal_ds.jsonl'
     shutil.copy2(source_path, composal_file_path)
 
-    # Create Dataset File with phase_id
-    base_ds = await repos.DatasetRepository(db).create_composal_ds(
-        pipeline_id=pipeline.id,
-        phase_id=phase.id,
-        name=f"{pipeline.name} Composal Dataset",
-        description="Composal Dataset for pipeline",
-        file_path=str(composal_file_path),
-    )
-
-    ds_file = await repos.DatasetFileRepository(db).create_dataset_file(
-        parent_dataset_id=base_ds.id,
+    # Update DatasetFile with final path and sample count
+    await repos.DatasetFileRepository(db).update(
+        file_id=ds_file.id,
         file_path=path,
-        file_type="jsonl",
-        phase_id=phase.id,
         sample_count=len(generated)
     )
 
+    # Refresh to get updated data
+    await db.refresh(ds_file)
+
+    # Get all batch files for this dataset file
+    batch_files = await repos.BatchGeneratedDatasetFileRepository(db).get_by_parent_file(ds_file.id)
+
     return {
-        "message": f"Generated {len(generated)} samples",
+        "message": f"Generated {len(generated)} samples in {len(batch_files)} batches",
         "data": {
             "compose_ds": base_ds.model_dump(),
             "ds_file": ds_file.model_dump(),
+            "batch_files": [bf.model_dump() for bf in batch_files],
         }
     }
 
@@ -344,9 +373,9 @@ async def test_evaluation(
         }
     }
 
-@router.post("/phase/train")
+@router.post("/phase/{phase_id}/train")
 async def train_model(
-    payload: schemas.StartTrainPhase,
+    phase_id: str,
     db: AsyncSession = Depends(get_db_session),
     request: Request = None,
 ):
@@ -356,7 +385,7 @@ async def train_model(
     3. TrainedRepository - save trained model info, ref DatasetFile, Phase
     4. Return trained model info
     '''
-    phase = await repos.PhaseRepository(db).get_by_id(payload.phase_id)
+    phase = await repos.PhaseRepository(db).get_by_id(phase_id)
     if not phase:
         return {"error": "Phase not found"}
 
@@ -366,7 +395,7 @@ async def train_model(
     label_config = pipeline.label_configs[0]  # Get the first label config
 
     # Fetch ds_file for phase
-    ds_file = (await repos.DatasetFileRepository(db).get_by_phase(payload.phase_id))[0]
+    ds_file = (await repos.DatasetFileRepository(db).get_by_phase(phase_id))[0]
     if not ds_file:
         return {"error": "Dataset file not found for phase"}
 
@@ -386,7 +415,7 @@ async def train_model(
 
     # Save trained model info
     trained_info = await repos.TrainedModelRepository(db).create(
-        phase_id=payload.phase_id,
+        phase_id=phase_id,
         model_name="Payment Classification Model v" + str(phase.phase_number),
         model_save_path=checkpoint_path,
         dataset_file_id=ds_file.id,
@@ -880,33 +909,151 @@ async def get_testset(
             "message": "An unexpected error occurred while loading the test set"
         }
 
+@router.get("/phase/{phase_id}/trainingpool")
+async def get_training_pool(
+    phase_id: str,
+    db: AsyncSession = Depends(get_db_session)
+):
+    '''
+    Get the training pool dataset for a phase
+    Returns data in a schema similar to DatasetFile model
+
+    Args:
+        phase_id: Phase ID to fetch the training pool for
+
+    Returns:
+        Training pool data structured like DatasetFile model with samples
+    '''
+    # Fetch phase
+    phase = await repos.PhaseRepository(db).get_by_id(phase_id)
+    if not phase:
+        return {
+            "error": "Phase not found",
+            "message": f"No phase found with ID {phase_id}"
+        }
+
+    # Get composal datasets for this phase
+    composal_datasets = await repos.DatasetRepository(db).get_by_phase(phase_id)
+    if not composal_datasets:
+        return {
+            "error": "No training pool found",
+            "message": "No composal dataset exists for this phase. Run first-gen to create one."
+        }
+
+    # Use the first (most recent) composal dataset for this phase
+    base_ds = composal_datasets[0]
+    training_pool_path = base_ds.file_path
+
+    try:
+        # Read the training pool file (JSONL format)
+        samples = []
+        with open(training_pool_path, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    samples.append(json.loads(line))
+
+        # Get label distribution
+        label_counts = {}
+        for sample in samples:
+            label = sample.get("label")
+            if isinstance(label, int):
+                label = str(label)
+            label_counts[label] = label_counts.get(label, 0) + 1
+
+        # Return with DatasetFile-like schema
+        from datetime import datetime
+        return {
+            "message": "Training pool loaded successfully",
+            "data": {
+                "id": base_ds.id,
+                "parent_dataset_id": base_ds.id,  # Reference to composal dataset
+                "file_path": training_pool_path,
+                "phase_id": phase_id,
+                "file_type": "training_pool",
+                "sample_count": len(samples),
+                "created_at": base_ds.created_at.isoformat() if base_ds.created_at else datetime.now().isoformat(),
+                "samples": samples,  # Additional: actual sample data
+                "label_counts": label_counts  # Additional: label distribution
+            }
+        }
+    except FileNotFoundError:
+        return {
+            "error": f"Training pool file not found at {training_pool_path}",
+            "message": "The training pool file may have been deleted or moved"
+        }
+    except json.JSONDecodeError as e:
+        return {
+            "error": f"Failed to parse training pool JSON: {str(e)}",
+            "message": "The training pool file may be corrupted"
+        }
+    except Exception as e:
+        return {
+            "error": f"Failed to load training pool: {str(e)}",
+            "message": "An unexpected error occurred while loading the training pool"
+        }
+
 @router.get("/phase/{phase_id}")
 async def view_phase_detail(
     phase_id: str,
     db: AsyncSession = Depends(get_db_session)
 ):
     '''
-    1. Show phase generated data
-    2. Show phase trained model
-    3. Show phase evaluation result
+    Get detailed phase information with nested relationships
+
+    Returns phase data with:
+    - Composal datasets generated by this phase
+    - Dataset files associated with this phase
+    - Trained models for this phase
+    - Evaluation results for trained models
     '''
     phase = await repos.PhaseRepository(db).get_by_id(phase_id)
     if not phase:
         return {"error": "Phase not found"}
-    pipeline = await repos.PipelineRepository(db).get_by_id(phase.pipeline_id)
 
-    if not pipeline:
-        return {"error": "Pipeline not found"}
+    # Build phase data with nested relationships
+    phase_data = phase.model_dump()
 
-    base_ds = (await repos.DatasetRepository(db).get_by_pipeline(pipeline.id))[0]
-    ds_files = await repos.DatasetFileRepository(db).get_by_dataset(base_ds.id)
+    # Get composal datasets for this phase
+    composal_datasets = await repos.DatasetRepository(db).get_by_phase(phase.id)
+    phase_data["composal_datasets"] = [ds.model_dump() for ds in composal_datasets] if composal_datasets else []
+
+    # Get dataset files for this phase
+    dataset_files = await repos.DatasetFileRepository(db).get_by_phase(phase.id)
+    phase_data["dataset_files"] = [df.model_dump() for df in dataset_files] if dataset_files else []
+
+    # Get trained models for this phase
+    trained_models = await repos.TrainedModelRepository(db).get_by_phase(phase.id)
+    phase_data["trained_models"] = []
+
+    for trained_model in trained_models:
+        trained_model_data = trained_model.model_dump()
+
+        # Parse training_params if exists
+        if trained_model.training_params:
+            trained_model_data["training_params"] = trained_model.get_training_params()
+
+        # Fetch evaluation results for this trained model
+        evaluation_results = await repos.EvaluationResultRepository(db).get_by_trained_model(trained_model.id)
+        trained_model_data["evaluation_results"] = []
+
+        for eval_result in evaluation_results:
+            eval_data = eval_result.model_dump()
+            # Parse JSON fields
+            if eval_result.label_metrics:
+                eval_data["label_metrics"] = eval_result.get_label_metrics()
+            if eval_result.metrics:
+                eval_data["metrics"] = eval_result.get_metrics()
+            trained_model_data["evaluation_results"].append(eval_data)
+
+        phase_data["trained_models"].append(trained_model_data)
+
+    # Child_phases_ids if current phase is initial phase
+    if not phase.phase_path:
+        child_phases = await repos.PhaseRepository(db).get_child_phases(phase.id)
+        child_phases_dump = [cp.model_dump() for cp in child_phases] if child_phases else []
+        phase_data["child_phases"] = child_phases_dump
 
     return {
-        "message": "Not implemented yet",
-        "data": {
-            "phase": phase.model_dump(),
-            "pipeline": pipeline.model_dump(),
-            "base_dataset": base_ds.model_dump() if base_ds else None,
-            "dataset_files": [f.model_dump() for f in ds_files] if ds_files else [],
-        }
+        "message": "Phase details retrieved successfully",
+        "data": phase_data
     }

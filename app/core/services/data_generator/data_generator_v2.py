@@ -4,7 +4,7 @@ from src.payment_classifier.prompts.base import BasePromptManager
 from app.core.services.data_manager import DataManager
 from app.core.schemas.workflow import Result
 from app.core.schemas import Sample
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Optional, Callable, Awaitable
 import asyncio
 import random
 import logging
@@ -27,7 +27,12 @@ class DataGeneratorV2:
 
         return await self.iterative_gen(human_seeds, prompt, parallel_generations, total_message_per_batch, batches)
 
-    async def fresh_gen_v2(self, human_seeds: List[Sample], expect_total_each_label: Dict[Union[str, int], int]) -> tuple[List[Sample], str]:
+    async def fresh_gen_v2(
+        self,
+        human_seeds: List[Sample],
+        expect_total_each_label: Dict[Union[str, int], int],
+        on_batch_generated: Optional[Callable[[int, List[Sample], str], Awaitable[None]]] = None
+    ) -> tuple[List[Sample], str]:
         """Generate fresh data with label-based quantity tracking
 
         Args:
@@ -35,6 +40,8 @@ class DataGeneratorV2:
             expect_total_each_label: Dictionary mapping label (str or int) to expected quantity
                                     e.g., {"payment_intent": 200, "payment_request": 200, "open_intent": 200}
                                     or {0: 200, 1: 200, 2: 200}
+            on_batch_generated: Optional async callback called after each batch generation
+                               Signature: async def callback(batch_number: int, samples: List[Sample], temp_file_path: str)
 
         Returns:
             Tuple of (final_samples, base_file_path)
@@ -113,6 +120,10 @@ class DataGeneratorV2:
             if added_samples:
                 self._append_to_file(temp_file_path, added_samples)
                 logger.info(f"Saved {len(added_samples)} new samples to temp file")
+
+                # Call the batch callback if provided
+                if on_batch_generated:
+                    await on_batch_generated(iteration, added_samples, str(temp_file_path))
 
             # Update all_results and previous_batch_results for next iteration
             all_results.extend(batch_results)
@@ -193,6 +204,8 @@ class DataGeneratorV2:
         # Filter against existing data
         filtered_results = await self.data_manager.filter(internal_deduped)
         self.data_manager.save(filtered_results)
+        # FIXME: 
+        # Additional steps to store the saved samples
 
         if track_saved:
             saved_samples.extend(filtered_results)
