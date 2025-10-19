@@ -140,11 +140,12 @@ async def first_generation(
     if not pipeline or not pipeline.label_configs:
         return {"error": "Pipeline or label config not found"}
 
-    # Create new iteration phase
+    # Create new iteration phase (base phase with phase_path="")
     phase = await repos.PhaseRepository(db).create(
         pipeline_id=pipeline.id,
         status=schemas.PHASE_STATUS.IN_PROGRESS,
         phase_number=0,
+        previous_phase_id=None,  # No previous phase - this is a base phase
     )
 
     label_config = pipeline.label_configs[0]  # Get the first label config
@@ -578,7 +579,13 @@ async def evaluate_human_set(
     )
 
     # Eval on training pool for low confidence
-    base_ds = (await repos.DatasetRepository(db).get_by_pipeline(pipeline.id))[0]
+    # Get the parent (root) phase's composal dataset for this sequence
+    parent_phase = await repos.PhaseRepository(db).get_parent_phase(phase.id)
+    if not parent_phase:
+        # This IS the parent phase
+        parent_phase = phase
+
+    base_ds = (await repos.DatasetRepository(db).get_by_phase(parent_phase.id))[0]
     training_ds = services.DataManager(label_config=label_config, absolute_dir=base_ds.file_path).to_datasets()
     training_ds = training_ds.shuffle(seed=random.randint(0, 1000))
 
@@ -814,7 +821,13 @@ async def generate_error_bucket_samples(
             low_conf_by_label[label].append(sample)
 
     # Fill gaps with random samples from training set if needed
-    base_ds = (await repos.DatasetRepository(db).get_by_pipeline(phase.pipeline_id))[0]
+    # Get the parent (root) phase's composal dataset for this sequence
+    parent_phase = await repos.PhaseRepository(db).get_parent_phase(phase.id)
+    if not parent_phase:
+        # This IS the parent phase
+        parent_phase = phase
+
+    base_ds = (await repos.DatasetRepository(db).get_by_phase(parent_phase.id))[0]
     training_ds = services.DataManager(label_config=label_config, absolute_dir=base_ds.file_path).to_datasets()
     training_ds = training_ds.shuffle(seed=random.randint(0, 10000))
 
@@ -853,6 +866,163 @@ async def generate_error_bucket_samples(
         "data": {
             "error_buckets": error_buckets,
             "fix_generation_config": generation_config,
+        }
+    }
+
+
+@router.post("/phase/{phase_id}/continue-gen")
+async def continue_generation(
+    phase_id: str,
+    db: AsyncSession = Depends(get_db_session),
+    request: Request = None,
+):
+    """
+    Continue dataset generation from a parent phase
+
+    1. Query the base/parent phase (root with phase_path="")
+    2. Query all phases in sequence to find the previous/latest phase
+    3. Get previous phase evaluation (for future use in targeted generation)
+    4. Create new child phase as child of PREVIOUS phase and generate data
+    5. Add generated data to parent's composal dataset
+    """
+    # 1. Query the provided phase and validate it's a root/parent phase
+    provided_phase = await repos.PhaseRepository(db).get_by_id(phase_id)
+    if not provided_phase:
+        return {"error": "Phase not found"}
+
+    # Get pipeline and label config
+    pipeline = await repos.PipelineRepository(db).get_by_id(provided_phase.pipeline_id)
+    if not pipeline or not pipeline.label_configs:
+        return {"error": "Pipeline or label config not found"}
+
+    label_config = pipeline.label_configs[0]
+
+    # Determine parent_phase (root) and previous_phase (latest in sequence)
+    if provided_phase.phase_path == "":
+        # Provided phase is the root/parent phase
+        parent_phase = provided_phase
+
+        # 2. Query all phases in this sequence to find the previous/latest phase
+        # Get all child phases (descendants) ordered by depth
+        child_phases = await repos.PhaseRepository(db).get_child_phases(parent_phase.id)
+
+        if child_phases:
+            # Latest phase is the last one (deepest in hierarchy)
+            previous_phase = child_phases[-1]
+        else:
+            # No child phases, so the parent is also the previous phase
+            previous_phase = parent_phase
+    else:
+        # Provided phase is NOT a root - this is an error
+        return {
+            "error": "Invalid phase_id: must be a root phase (phase_path='')",
+            "message": "Please provide the root phase ID of the sequence"
+        }
+
+    # 3. Get previous phase evaluation
+    # TODO: Use evaluation results to determine targeted generation
+    # previous_eval = await repos.EvaluationResultRepository(db).get_latest_by_phase(previous_phase.id)
+    # if previous_eval:
+    #     label_metrics = previous_eval.get_label_metrics()
+    #     # Analyze error patterns and low confidence samples
+    #     # Adjust generation parameters based on evaluation
+
+    # 4. Create new phase as child of PREVIOUS phase
+    # Calculate new phase number
+    all_phases = await repos.PhaseRepository(db).get_by_pipeline(pipeline.id)
+    new_phase_number = len(all_phases)
+
+    new_phase = await repos.PhaseRepository(db).create(
+        pipeline_id=pipeline.id,
+        status=schemas.PHASE_STATUS.IN_PROGRESS,
+        phase_number=new_phase_number,
+        previous_phase_id=previous_phase.id,  # Builds path by appending to previous phase
+    )
+
+    # Get parent phase's composal dataset
+    parent_composal_datasets = await repos.DatasetRepository(db).get_by_phase(parent_phase.id)
+    if not parent_composal_datasets:
+        return {"error": "Parent phase has no composal dataset"}
+
+    parent_composal_ds = parent_composal_datasets[0]
+
+    # Create a new dataset file under parent's composal dataset
+    ds_file = await repos.DatasetFileRepository(db).create_dataset_file(
+        parent_dataset_id=parent_composal_ds.id,
+        file_path="",  # Will be updated after generation
+        file_type="jsonl",
+        phase_id=new_phase.id,
+        sample_count=0  # Will be updated after generation
+    )
+
+    # Create DataManager and DataGeneratorV2 instances
+    data_manager = services.DataManager(
+        label_config=label_config,
+        rouge_threshold=0.6,
+        base_dir=f'.cache/{pipeline.id}/{new_phase.id}/{new_phase.phase_number}'
+    )
+
+    data_generator_v2 = services.DataGeneratorV2(
+        llm=request.app.state.teacher_llm,
+        prompt_mgr=request.app.state.prompt_mgr,
+        data_manager=data_manager,
+    )
+
+    # Load human seeds
+    human_seeds = load_human_seed(label_config)
+
+    # Create dict for label counts
+    # TODO: Adjust based on evaluation results (targeted generation)
+    label_count_dict = label_config.get_label2id()
+    for key in label_count_dict:
+        label_count_dict[key] = 200
+
+    # Define callback to save each batch to database
+    async def on_batch_generated(batch_number: int, samples: list, temp_file_path: str):
+        """Callback to save batch information to database"""
+        batch_repo = repos.BatchGeneratedDatasetFileRepository(db)
+        await batch_repo.create_batch_file(
+            parent_dataset_file_id=ds_file.id,
+            file_path=temp_file_path,
+            batch_number=batch_number,
+            sample_count=len(samples)
+        )
+        logger.info(f"Saved batch {batch_number} with {len(samples)} samples to database")
+
+    # Generate with batch tracking
+    generated, path = await data_generator_v2.fresh_gen_v2(
+        human_seeds=human_seeds,
+        expect_total_each_label=label_count_dict,
+        on_batch_generated=on_batch_generated
+    )
+
+    # Update DatasetFile with final path, sample count, and status
+    await repos.DatasetFileRepository(db).update(
+        file_id=ds_file.id,
+        file_path=path,
+        sample_count=len(generated),
+        status=schemas.DATASET_FILE_STATUS.DONE
+    )
+
+    # Refresh to get updated data
+    await db.refresh(ds_file)
+
+    # Get all batch files for this dataset file
+    batch_files = await repos.BatchGeneratedDatasetFileRepository(db).get_by_parent_file(ds_file.id)
+
+    # Update parent composal dataset's file to include the new data
+    # The parent composal dataset now has multiple dataset files
+    # TODO: Optionally merge all dataset files into a single composal file
+
+    return {
+        "message": f"Generated {len(generated)} samples in {len(batch_files)} batches for new phase",
+        "data": {
+            "new_phase": new_phase.model_dump(),
+            "parent_phase": parent_phase.model_dump(),  # Root phase (phase_path="")
+            "previous_phase": previous_phase.model_dump(),  # Latest phase before new one
+            "parent_composal_ds": parent_composal_ds.model_dump(),
+            "ds_file": ds_file.model_dump(),
+            "batch_files": [bf.model_dump() for bf in batch_files],
         }
     }
 
@@ -1050,12 +1220,19 @@ async def get_training_pool(
             "message": f"No phase found with ID {phase_id}"
         }
 
-    # Get composal datasets for this phase
-    composal_datasets = await repos.DatasetRepository(db).get_by_phase(phase_id)
+    # Get the parent (root) phase's composal dataset for this sequence
+    # All phases in a sequence share the same composal dataset from the parent
+    parent_phase = await repos.PhaseRepository(db).get_parent_phase(phase.id)
+    if not parent_phase:
+        # This IS the parent phase
+        parent_phase = phase
+
+    # Get composal datasets for the parent phase
+    composal_datasets = await repos.DatasetRepository(db).get_by_phase(parent_phase.id)
     if not composal_datasets:
         return {
             "error": "No training pool found",
-            "message": "No composal dataset exists for this phase. Run first-gen to create one."
+            "message": "No composal dataset exists for this phase sequence. Run first-gen to create one."
         }
 
     # Use the first (most recent) composal dataset for this phase

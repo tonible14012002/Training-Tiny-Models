@@ -88,19 +88,44 @@ class PipelinePhase(SQLModel, table=True):
     dataset_files: List["DatasetFile"] = Relationship(back_populates="phase")
     phase_error_buckets: List["PhaseErrorBucket"] = Relationship(back_populates="phase")
 
-    def get_parent_phase_id(self) -> Optional[str]:
-        """Get the immediate parent phase ID from phase_path"""
+    def get_previous_phase_id(self) -> Optional[str]:
+        """Get the immediate previous phase ID from phase_path
+
+        Returns the ID of the phase that this phase was created from.
+        For a phase with path "a/b/c", returns "c" (the immediate predecessor).
+        Returns None for base phases (phase_path="").
+        """
         if not self.phase_path:
             return None
         path_parts = self.phase_path.split('/')
         return path_parts[-1] if path_parts else None
 
-    def get_root_phase_id(self) -> Optional[str]:
-        """Get the root (first) phase ID from phase_path"""
+    def get_parent_phase_id(self) -> Optional[str]:
+        """Get the parent (root/base) phase ID from phase_path
+
+        Returns the ID of the root phase that started this sequence.
+        For a phase with path "a/b/c", returns "a" (the base phase).
+        Returns None for base phases (phase_path="").
+        """
         if not self.phase_path:
             return None
         path_parts = self.phase_path.split('/')
         return path_parts[0] if path_parts else None
+
+    def get_root_phase_id(self) -> Optional[str]:
+        """Alias for get_parent_phase_id() for backward compatibility"""
+        return self.get_parent_phase_id()
+
+    def get_ancestor_phase_ids(self) -> List[str]:
+        """Get all ancestor phase IDs in order from root to immediate previous
+
+        Returns a list of phase IDs representing the ancestry chain.
+        For a phase with path "a/b/c", returns ["a", "b", "c"].
+        Returns empty list for base phases (phase_path="").
+        """
+        if not self.phase_path:
+            return []
+        return self.phase_path.split('/')
 
     def get_depth(self) -> int:
         """Get the depth of this phase in the hierarchy (0 for root phases)"""
@@ -109,7 +134,12 @@ class PipelinePhase(SQLModel, table=True):
         return len(self.phase_path.split('/'))
 
     def build_child_path(self) -> str:
-        """Build the phase_path that a child of this phase should have"""
+        """Build the phase_path that a child of this phase should have
+
+        This method constructs the path that a new child phase should have.
+        - If this is a base phase (phase_path=""), child path is just this phase's ID
+        - Otherwise, child path is current path + "/" + this phase's ID
+        """
         if not self.phase_path:
             return self.id
         return f"{self.phase_path}/{self.id}"

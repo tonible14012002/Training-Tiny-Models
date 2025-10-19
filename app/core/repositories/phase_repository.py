@@ -18,7 +18,7 @@ class PhaseRepository:
         phase_number: int,
         checkpoint_id: Optional[str] = None,
         checkpoint_path: Optional[str] = None,
-        parent_phase_id: Optional[str] = None,
+        previous_phase_id: Optional[str] = None,
         status: str = "pending"
     ) -> PipelinePhase:
         """Create a new phase
@@ -28,18 +28,32 @@ class PhaseRepository:
             phase_number: Phase number
             checkpoint_id: Optional checkpoint ID
             checkpoint_path: Optional checkpoint path
-            parent_phase_id: Optional parent phase ID (will be used to build phase_path)
+            previous_phase_id: Optional previous phase ID (will be used to build phase_path)
+                - If None: creates a base phase with phase_path=""
+                - If provided: appends new phase ID to previous phase's path
             status: Phase status (default: "pending")
 
         Returns:
             The created PipelinePhase
+
+        Phase path structure:
+            - Base phase: phase_path=""
+            - 1st child: phase_path="<base_phase_id>"
+            - 2nd child: phase_path="<base_phase_id>/<1st_child_id>"
+            - nth child: phase_path="<base_phase_id>/.../<n-1_phase_id>"
         """
-        # Build phase_path from parent
+        # Build phase_path from previous phase
         phase_path = ""
-        if parent_phase_id:
-            parent_phase = await self.get_by_id(parent_phase_id)
-            if parent_phase:
-                phase_path = parent_phase.build_child_path()
+        if previous_phase_id:
+            previous_phase = await self.get_by_id(previous_phase_id)
+            if previous_phase:
+                # Append previous phase ID to its path
+                if previous_phase.phase_path == "":
+                    # Previous is base phase, so path is just its ID
+                    phase_path = previous_phase.id
+                else:
+                    # Previous has a path, append its ID
+                    phase_path = f"{previous_phase.phase_path}/{previous_phase.id}"
 
         phase = PipelinePhase(
             pipeline_id=pipeline_id,
@@ -325,33 +339,154 @@ class PhaseRepository:
         result = await self.session.execute(statement)
         return list(result.scalars().all())
 
-    async def get_child_phases(self, parent_phase_id: str) -> List[PipelinePhase]:
-        """Get all nested children of a phase (not just direct children)
+    async def get_child_phases(self, phase_id: str) -> List[PipelinePhase]:
+        """Get all nested children of a phase using phase_path LIKE query
+
+        Queries all phases where phase_path starts with the given phase_id.
+        This returns all descendants (children, grandchildren, etc.).
 
         Args:
-            parent_phase_id: The parent phase ID
+            phase_id: The phase ID to find children for
 
         Returns:
             List of all nested child phases, ordered by depth in hierarchy
+
+        Examples:
+            If phase_id="abc", finds phases with:
+            - phase_path="abc" (direct child)
+            - phase_path="abc/def" (grandchild)
+            - phase_path="abc/def/ghi" (great-grandchild)
+            etc.
         """
-        parent_phase = await self.get_by_id(parent_phase_id)
-        if not parent_phase:
+        phase = await self.get_by_id(phase_id)
+        if not phase:
             return []
 
-        # Find all phases where phase_path starts with the parent's ID
-        # This returns all nested children, not just direct children
-        # Match either exact (direct children) or starts with parent_id/ (deeper descendants)
+        # Find all phases where phase_path starts with this phase's ID
+        # Match either exact (direct children) or starts with phase_id/ (deeper descendants)
         statement = select(PipelinePhase).where(
-            PipelinePhase.pipeline_id == parent_phase.pipeline_id,
-            (PipelinePhase.phase_path == parent_phase_id) |
-            (PipelinePhase.phase_path.like(f"{parent_phase_id}/%"))
+            PipelinePhase.pipeline_id == phase.pipeline_id,
+            (PipelinePhase.phase_path == phase_id) |
+            (PipelinePhase.phase_path.like(f"{phase_id}/%"))
         )
 
         result = await self.session.execute(statement)
         phases = list(result.scalars().all())
 
-        # Order by depth (number of parent IDs in phase_path)
-        # Split the path by '/' to get the list of parent IDs, then sort by length
+        # Order by depth (number of IDs in phase_path)
         phases.sort(key=lambda p: len(p.phase_path.split('/')))
 
         return phases
+
+    async def get_previous_phase(self, phase_id: str) -> Optional[PipelinePhase]:
+        """Get the immediate previous phase by querying the last phase_id in phase_path
+
+        For a phase with phase_path="a/b/c", returns the phase with id="c".
+
+        Args:
+            phase_id: The phase ID to find the previous phase for
+
+        Returns:
+            The previous phase, or None if this is a base phase or phase not found
+        """
+        phase = await self.get_by_id(phase_id)
+        if not phase or not phase.phase_path:
+            # Base phase or not found - no previous phase
+            return None
+
+        previous_phase_id = phase.get_previous_phase_id()
+        if not previous_phase_id:
+            return None
+
+        return await self.get_by_id(previous_phase_id)
+
+    async def get_parent_phase(self, phase_id: str) -> Optional[PipelinePhase]:
+        """Get the parent (root/base) phase by querying the first phase_id in phase_path
+
+        For a phase with phase_path="a/b/c", returns the phase with id="a" and phase_path="".
+
+        Args:
+            phase_id: The phase ID to find the parent phase for
+
+        Returns:
+            The parent/root phase, or None if this is a base phase or phase not found
+        """
+        phase = await self.get_by_id(phase_id)
+        if not phase or not phase.phase_path:
+            # Already a base phase or not found
+            return None
+
+        parent_phase_id = phase.get_parent_phase_id()
+        if not parent_phase_id:
+            return None
+
+        # Query for phase with this ID and empty phase_path (should be base phase)
+        statement = select(PipelinePhase).where(
+            PipelinePhase.id == parent_phase_id,
+            PipelinePhase.phase_path == ""
+        )
+        result = await self.session.execute(statement)
+        return result.scalars().first()
+
+    async def get_all_ancestors(self, phase_id: str) -> List[PipelinePhase]:
+        """Get all ancestor phases from root to immediate previous
+
+        For a phase with phase_path="a/b/c", returns phases [a, b, c] in order.
+
+        Args:
+            phase_id: The phase ID to find ancestors for
+
+        Returns:
+            List of ancestor phases ordered from root to immediate previous
+        """
+        phase = await self.get_by_id(phase_id)
+        if not phase or not phase.phase_path:
+            return []
+
+        ancestor_ids = phase.get_ancestor_phase_ids()
+        if not ancestor_ids:
+            return []
+
+        # Query all ancestors by their IDs
+        statement = select(PipelinePhase).where(
+            PipelinePhase.id.in_(ancestor_ids)
+        )
+        result = await self.session.execute(statement)
+        ancestor_map = {p.id: p for p in result.scalars().all()}
+
+        # Return in order from root to immediate previous
+        return [ancestor_map[ancestor_id] for ancestor_id in ancestor_ids if ancestor_id in ancestor_map]
+
+    async def get_direct_children(self, phase_id: str) -> List[PipelinePhase]:
+        """Get only direct children (not nested descendants)
+
+        Queries phases where phase_path exactly equals the given phase_id.
+
+        Args:
+            phase_id: The phase ID to find direct children for
+
+        Returns:
+            List of direct child phases
+        """
+        phase = await self.get_by_id(phase_id)
+        if not phase:
+            return []
+
+        # For base phase, children have phase_path=phase_id
+        # For non-base phase, children have phase_path=parent_path/phase_id
+        if phase.phase_path == "":
+            # This is a base phase, children have path=phase_id
+            statement = select(PipelinePhase).where(
+                PipelinePhase.pipeline_id == phase.pipeline_id,
+                PipelinePhase.phase_path == phase_id
+            )
+        else:
+            # Non-base phase, children have path=current_path/phase_id
+            child_path = phase.build_child_path()
+            statement = select(PipelinePhase).where(
+                PipelinePhase.pipeline_id == phase.pipeline_id,
+                PipelinePhase.phase_path == child_path
+            )
+
+        result = await self.session.execute(statement)
+        return list(result.scalars().all())
