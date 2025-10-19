@@ -214,11 +214,12 @@ async def first_generation(
     source_path = Path(path)
     shutil.copy2(source_path, composal_file_path)
 
-    # Update DatasetFile with final path and sample count
+    # Update DatasetFile with final path, sample count, and status
     await repos.DatasetFileRepository(db).update(
         file_id=ds_file.id,
         file_path=path,
-        sample_count=len(generated)
+        sample_count=len(generated),
+        status=schemas.DATASET_FILE_STATUS.DONE
     )
 
     # Refresh to get updated data
@@ -289,6 +290,117 @@ async def test_first_generation(
                 label: sum(1 for s in generated if s.label == label)
                 for label in label_config.get_id2label().values()
             }
+        }
+    }
+
+@router.get("/phase/{phase_id}/generation-status")
+async def get_generation_status(
+    phase_id: str,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """
+    Get dataset generation status for a phase (can be called while generation is in progress)
+
+    Returns:
+        - DatasetFile information with hardcoded status "generating"
+        - All BatchGeneratedDatasetFile records (even if generation is incomplete)
+        - Current sample counts and label distribution from batch files
+    """
+    # Fetch phase
+    phase = await repos.PhaseRepository(db).get_by_id(phase_id)
+    if not phase:
+        return {
+            "error": "Phase not found",
+            "message": f"No phase found with ID {phase_id}"
+        }
+
+    # Fetch pipeline to get label config
+    pipeline = await repos.PipelineRepository(db).get_by_id(phase.pipeline_id)
+    if not pipeline or not pipeline.label_configs:
+        return {"error": "Pipeline or label config not found"}
+
+    label_config = pipeline.label_configs[0]
+
+    # Get dataset files for this phase
+    dataset_files = await repos.DatasetFileRepository(db).get_by_phase(phase_id)
+
+    if not dataset_files:
+        return {
+            "error": "No dataset file found",
+            "message": "Dataset file not yet created for this phase. Generation may not have started."
+        }
+
+    # Use the first (most recent) dataset file
+    ds_file = dataset_files[0]
+
+    # Get all batch files for this dataset file
+    batch_files = await repos.BatchGeneratedDatasetFileRepository(db).get_by_parent_file(ds_file.id)
+
+    # Calculate current totals from batch files and read samples
+    total_samples_from_batches = 0
+    label_counts = {}
+    batch_files_with_samples = []
+
+    for batch_file in batch_files:
+        batch_samples = []
+        try:
+            # Read batch file to get samples
+            with open(batch_file.file_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    if line.strip():
+                        sample = json.loads(line)
+                        batch_samples.append(sample)
+
+                        # Count labels
+                        label = sample.get("label")
+                        if isinstance(label, int):
+                            label = str(label)
+                        label_counts[label] = label_counts.get(label, 0) + 1
+
+            total_samples_from_batches += len(batch_samples)
+
+            # Add batch file with samples
+            batch_data = batch_file.model_dump()
+            batch_data["samples"] = batch_samples
+            batch_files_with_samples.append(batch_data)
+
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            logger.warning(f"Could not read batch file {batch_file.file_path}: {e}")
+            # Add batch file without samples if error occurs
+            batch_data = batch_file.model_dump()
+            batch_data["samples"] = []
+            batch_files_with_samples.append(batch_data)
+            continue
+
+    # Build response
+    ds_file_data = ds_file.model_dump()
+    ds_file_data["current_sample_count"] = total_samples_from_batches
+    ds_file_data["label_counts"] = label_counts
+    ds_file_data["batch_count"] = len(batch_files)
+
+    # If status is "done", read and include final samples
+    if ds_file.status == schemas.DATASET_FILE_STATUS.DONE and ds_file.file_path:
+        final_samples = []
+        try:
+            with open(ds_file.file_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    if line.strip():
+                        sample = json.loads(line)
+                        final_samples.append(sample)
+            ds_file_data["samples"] = final_samples
+            logger.info(f"Loaded {len(final_samples)} final samples from completed dataset file")
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            logger.warning(f"Could not read final dataset file {ds_file.file_path}: {e}")
+            ds_file_data["samples"] = []
+    else:
+        ds_file_data["samples"] = None  # Not done yet, no final samples
+
+    return {
+        "message": f"Generation status retrieved: {len(batch_files)} batches, {total_samples_from_batches} samples",
+        "data": {
+            "phase_id": phase_id,
+            "dataset_file": ds_file_data,
+            "batch_files": batch_files_with_samples,
         }
     }
 
@@ -493,6 +605,12 @@ async def evaluate_human_set(
         recall=eval_output["overall"].get("macro_recall", 0.0),
         f1_score=eval_output["overall"].get("macro_f1", 0.0),
         label_metrics=json.dumps(label_metrics),
+    )
+
+    # Update phase status to completed
+    await repos.PhaseRepository(db).update_status(
+        phase_id=payload.phase_id,
+        status=schemas.PHASE_STATUS.COMPLETED
     )
 
     resp = eval_info.model_dump()
@@ -738,7 +856,7 @@ async def generate_error_bucket_samples(
         }
     }
 
-# UI
+# Information For UI
 @router.get("/pipelines/{pipeline_id}")
 async def pipeline_detail(
     pipeline_id: str,

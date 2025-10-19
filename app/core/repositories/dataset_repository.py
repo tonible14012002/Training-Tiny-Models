@@ -190,7 +190,8 @@ class DatasetFileRepository:
         file_id: str,
         file_path: Optional[str] = None,
         file_type: Optional[str] = None,
-        sample_count: Optional[int] = None
+        sample_count: Optional[int] = None,
+        status: Optional[str] = None
     ) -> Optional[DatasetFile]:
         """Update dataset file"""
         dataset_file = await self.get_by_id(file_id)
@@ -203,6 +204,8 @@ class DatasetFileRepository:
             dataset_file.file_type = file_type
         if sample_count is not None:
             dataset_file.sample_count = sample_count
+        if status:
+            dataset_file.status = status
 
         self.session.add(dataset_file)
         await self.session.commit()

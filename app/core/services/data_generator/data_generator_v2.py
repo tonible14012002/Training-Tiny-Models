@@ -131,6 +131,11 @@ class DataGeneratorV2:
 
             logger.debug(f"Iteration {iteration}: Generated {len(batch_results)} samples, added {added_count} unique samples to tracker")
 
+            # Wait 20 seconds before next iteration to avoid rate limits
+            if not self._is_quantity_sufficient(quantity_tracker, expect_total_each_label):
+                logger.info("Waiting 20 seconds before next batch to avoid rate limits...")
+                await asyncio.sleep(20)
+
         # Flatten quantity_tracker to get final samples
         final_samples = []
         for samples in quantity_tracker.values():

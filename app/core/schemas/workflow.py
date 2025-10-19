@@ -358,3 +358,7 @@ class PHASE_STATUS:
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     FAILED = "failed"
+
+class DATASET_FILE_STATUS:
+    GENERATING = "generating"
+    DONE = "done"

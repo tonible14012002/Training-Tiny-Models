@@ -144,6 +144,7 @@ class DatasetFile(SQLModel, table=True):
     phase_id: str = Field(foreign_key="pipeline_phase.id")
     file_type: Optional[str] = Field(default=None, max_length=50)  # train, validation, test, generated
     sample_count: int = Field(default=0)
+    status: str = Field(default="generating", max_length=50)  # generating, done
     created_at: datetime = Field(default_factory=utc_now)
 
     # Relationships
