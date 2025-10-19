@@ -73,7 +73,15 @@ class DataGeneratorV2:
         # Continue generating until all labels have enough samples
         while not self._is_quantity_sufficient(quantity_tracker, expect_total_each_label):
             iteration += 1
-            logger.info(f"Generation iteration {iteration}: Current counts = {self._get_current_counts(quantity_tracker)}, Target = {expect_total_each_label}")
+            current_counts = self._get_current_counts(quantity_tracker)
+            logger.info(f"Generation iteration {iteration}: Current counts = {current_counts}, Target = {expect_total_each_label}")
+
+            # Build rebalance instruction to guide LLM toward underrepresented labels
+            rebalance_instruction = ""
+            if iteration > 1:  # Start rebalancing from iteration 2 onwards
+                rebalance_instruction = self._build_rebalance_instruction(current_counts, expect_total_each_label)
+                if rebalance_instruction:
+                    logger.info(f"Rebalance instruction: {rebalance_instruction.strip()}")
 
             # Prepare seed examples
             if iteration == 1:
@@ -85,10 +93,10 @@ class DataGeneratorV2:
                 new_human_seeds = random.sample(human_seeds, k=min(len(human_seeds), 6))
                 seed_examples = new_seed + new_human_seeds
 
-            # Generate parallel batches
+            # Generate parallel batches with rebalance instruction
             generation_tasks = []
             for _ in range(parallel_generations):
-                generation_tasks.append(self._gen(seed_examples, prompt, messages_per_call))
+                generation_tasks.append(self._gen(seed_examples, prompt, messages_per_call, rebalance_instruction))
 
             # Run all generations in parallel
             parallel_results = await asyncio.gather(*generation_tasks)
@@ -161,6 +169,76 @@ class DataGeneratorV2:
     def _get_current_counts(self, quantity_tracker: Dict[Union[str, int], List[Sample]]) -> Dict[Union[str, int], int]:
         """Get current sample counts for each label"""
         return {label: len(samples) for label, samples in quantity_tracker.items()}
+
+    def _build_rebalance_instruction(
+        self,
+        current_counts: Dict[Union[str, int], int],
+        expected_counts: Dict[Union[str, int], int]
+    ) -> str:
+        """
+        Build a prompt instruction to rebalance label generation based on current progress.
+
+        Args:
+            current_counts: Current sample count for each label {label: count}
+            expected_counts: Expected/target sample count for each label {label: count}
+
+        Returns:
+            A string instruction to append to the prompt to guide the LLM to generate
+            more samples for labels that are behind schedule.
+
+        Example:
+            current: {"label_a": 10, "label_b": 45, "label_c": 30}
+            expected: {"label_a": 60, "label_b": 60, "label_c": 60}
+            Returns: "Focus on generating more samples for: label_a (need 50 more),
+                     label_c (need 30 more), label_b (need 15 more)."
+        """
+        # Calculate remaining needed for each label
+        remaining = {}
+        for label, expected in expected_counts.items():
+            current = current_counts.get(label, 0)
+            remaining[label] = max(0, expected - current)
+
+        # Sort labels by remaining count (descending) to prioritize labels that need more samples
+        sorted_labels = sorted(remaining.items(), key=lambda x: x[1], reverse=True)
+
+        # Filter out labels that have reached their target
+        labels_needing_more = [(label, count) for label, count in sorted_labels if count > 0]
+
+        if not labels_needing_more:
+            return ""  # All labels have sufficient samples
+
+        # Build the instruction
+        if len(labels_needing_more) == 1:
+            label, count = labels_needing_more[0]
+            return f"\n\n**IMPORTANT**: Generate ONLY '{label}' examples (need {count} more samples)."
+        else:
+            # Build priority list
+            priority_parts = []
+            for label, count in labels_needing_more:
+                priority_parts.append(f"'{label}' (need {count} more)")
+
+            priority_str = ", ".join(priority_parts)
+            return f"\n\n**IMPORTANT**: Focus on generating more samples with this priority: {priority_str}. Generate more examples for labels that need the most samples."
+
+    def _get_remaining_counts(
+        self,
+        current_counts: Dict[Union[str, int], int],
+        expected_counts: Dict[Union[str, int], int]
+    ) -> Dict[Union[str, int], int]:
+        """
+        Calculate remaining samples needed for each label.
+
+        Args:
+            current_counts: Current sample count for each label
+            expected_counts: Expected/target sample count for each label
+
+        Returns:
+            Dictionary of remaining samples needed for each label
+        """
+        return {
+            label: max(0, expected_counts[label] - current_counts.get(label, 0))
+            for label in expected_counts.keys()
+        }
 
     def _append_to_file(self, file_path, samples: List[Sample]):
         """Append samples to a file in JSONL format"""
@@ -324,16 +402,31 @@ class DataGeneratorV2:
 
         return parallel_gens, messages_per_api_call, batches_needed
 
-    async def _gen(self, seed: List[Sample], prompt: str, count: int) -> List[Sample]:
+    async def _gen(
+        self,
+        seed: List[Sample],
+        prompt: str,
+        count: int,
+        rebalance_instruction: str = ""
+    ) -> List[Sample]:
         '''
         Generate data from given seed and prompt
+
+        Args:
+            seed: Seed samples for generation
+            prompt: System prompt template
+            count: Number of examples to generate
+            rebalance_instruction: Optional instruction to guide label balancing
+
+        Returns:
+            List of generated samples
         '''
         personas_txt = "n- ".join(PersonasSeeder.random(6))  # Use a reasonable default for personas
-        
+
         seed_examples_txt = "\n".join([f"- {s.msg}" for s in seed])
         formatted_prompt = prompt.format(personas=personas_txt)
 
-        user_input = f"## Examples: {seed_examples_txt} \nContinue generate {count} diverse examples"
+        user_input = f"## Examples: {seed_examples_txt} \nContinue generate {count} diverse examples{rebalance_instruction}"
 
         data = (await self.llm.generate_structured_output([
             {"role": "system", "content": formatted_prompt},

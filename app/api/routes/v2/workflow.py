@@ -337,20 +337,47 @@ async def get_generation_status(
     # Get all batch files for this dataset file
     batch_files = await repos.BatchGeneratedDatasetFileRepository(db).get_by_parent_file(ds_file.id)
 
-    # Calculate current totals from batch files and read samples
+    # Calculate current totals from batch files using stored sample_count
+    # Note: Batch files append to the same temp file, so reading each file would give accumulated samples
+    # Instead, we use the sample_count from the database which is correct for each batch
     total_samples_from_batches = 0
     label_counts = {}
-    batch_files_with_samples = []
+    batch_files_info = []
 
     for batch_file in batch_files:
-        batch_samples = []
+        # Use the sample_count from the database (which is correct for this specific batch)
+        batch_sample_count = batch_file.sample_count
+        total_samples_from_batches += batch_sample_count
+
+        # Add batch file metadata only (no samples/examples)
+        batch_data = batch_file.model_dump()
+        # Explicitly exclude samples/examples fields if they exist
+        batch_data.pop("samples", None)
+        batch_data.pop("examples", None)
+        batch_files_info.append(batch_data)
+
+    # Build response
+    ds_file_data = ds_file.model_dump()
+    ds_file_data["current_sample_count"] = total_samples_from_batches
+    ds_file_data["batch_count"] = len(batch_files)
+
+    # Calculate label counts from final dataset file (if done) or from temp file (if in progress)
+    # This gives accurate label distribution without loading all batch files
+    file_to_read = None
+    if ds_file.status == schemas.DATASET_FILE_STATUS.DONE and ds_file.file_path:
+        file_to_read = ds_file.file_path
+    elif batch_files:
+        # Use the latest batch file (which has accumulated all samples so far)
+        file_to_read = batch_files[-1].file_path
+
+    if file_to_read:
+        final_samples = []
         try:
-            # Read batch file to get samples
-            with open(batch_file.file_path, 'r', encoding='utf-8') as f:
+            with open(file_to_read, 'r', encoding='utf-8') as f:
                 for line in f:
                     if line.strip():
                         sample = json.loads(line)
-                        batch_samples.append(sample)
+                        final_samples.append(sample)
 
                         # Count labels
                         label = sample.get("label")
@@ -358,50 +385,27 @@ async def get_generation_status(
                             label = str(label)
                         label_counts[label] = label_counts.get(label, 0) + 1
 
-            total_samples_from_batches += len(batch_samples)
-
-            # Add batch file with samples
-            batch_data = batch_file.model_dump()
-            batch_data["samples"] = batch_samples
-            batch_files_with_samples.append(batch_data)
-
+            # Only include samples in response if status is done
+            if ds_file.status == schemas.DATASET_FILE_STATUS.DONE:
+                ds_file_data["samples"] = final_samples
+                logger.info(f"Loaded {len(final_samples)} final samples from completed dataset file")
+            else:
+                ds_file_data["samples"] = None  # Not done yet, don't include samples
+                logger.info(f"Calculated label counts from {len(final_samples)} samples in progress")
         except (FileNotFoundError, json.JSONDecodeError) as e:
-            logger.warning(f"Could not read batch file {batch_file.file_path}: {e}")
-            # Add batch file without samples if error occurs
-            batch_data = batch_file.model_dump()
-            batch_data["samples"] = []
-            batch_files_with_samples.append(batch_data)
-            continue
-
-    # Build response
-    ds_file_data = ds_file.model_dump()
-    ds_file_data["current_sample_count"] = total_samples_from_batches
-    ds_file_data["label_counts"] = label_counts
-    ds_file_data["batch_count"] = len(batch_files)
-
-    # If status is "done", read and include final samples
-    if ds_file.status == schemas.DATASET_FILE_STATUS.DONE and ds_file.file_path:
-        final_samples = []
-        try:
-            with open(ds_file.file_path, 'r', encoding='utf-8') as f:
-                for line in f:
-                    if line.strip():
-                        sample = json.loads(line)
-                        final_samples.append(sample)
-            ds_file_data["samples"] = final_samples
-            logger.info(f"Loaded {len(final_samples)} final samples from completed dataset file")
-        except (FileNotFoundError, json.JSONDecodeError) as e:
-            logger.warning(f"Could not read final dataset file {ds_file.file_path}: {e}")
-            ds_file_data["samples"] = []
+            logger.warning(f"Could not read dataset file {file_to_read}: {e}")
+            ds_file_data["samples"] = [] if ds_file.status == schemas.DATASET_FILE_STATUS.DONE else None
     else:
-        ds_file_data["samples"] = None  # Not done yet, no final samples
+        ds_file_data["samples"] = None  # No file to read
+
+    ds_file_data["label_counts"] = label_counts
 
     return {
         "message": f"Generation status retrieved: {len(batch_files)} batches, {total_samples_from_batches} samples",
         "data": {
             "phase_id": phase_id,
             "dataset_file": ds_file_data,
-            "batch_files": batch_files_with_samples,
+            "batch_files": batch_files_info,
         }
     }
 
