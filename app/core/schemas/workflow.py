@@ -314,10 +314,6 @@ class StartTrainPhase(BaseModel):
     )
 
 class StartEvaluationPhase(BaseModel):
-    phase_id: str = Field(
-        ...,
-        description="The ID of the phase to evaluate"
-    )
     confidence_thresholds: float = Field(
         0.5,
         description="Confidence threshold for filter low confidence predictions"

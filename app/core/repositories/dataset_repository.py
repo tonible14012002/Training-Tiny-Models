@@ -112,13 +112,13 @@ class DatasetRepository:
             _ = dataset.dataset_files
         return dataset
 
-    async def get_by_phase(self, phase_id: str) -> List[ComposalDataset]:
+    async def get_by_phase(self, phase_id: str):
         """Get all composal datasets for a phase"""
         statement = select(ComposalDataset).where(
             ComposalDataset.phase_id == phase_id
         ).order_by(ComposalDataset.created_at.desc())
         result = await self.session.execute(statement)
-        return list(result.scalars().all())
+        return result.scalars().first()
 
 
 class DatasetFileRepository:

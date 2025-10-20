@@ -12,7 +12,7 @@ from starlette.exceptions import HTTPException
 from app.api.dependencies import api_key_auth
 from app.api.routes import health
 from app.api.routes import v2 as routes_v2
-from app.core.settings import settings, RELOAD_DIRS
+from app.core.settings import settings
 
 from src.payment_classifier.llm.litellm import LiteLLMProvider
 from src.payment_classifier.llm.settings import LLMSettings
@@ -135,12 +135,32 @@ if __name__ == "__main__":
     parser.add_argument("--host", type=str, default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--workers", type=int, default=4)
+    # check enable reload
+    parser.add_argument("--reload", action="store_true")
 
     args = parser.parse_args()
 
     host = args.host or "0.0.0.0"
     port = args.port or 8000
     workers = args.workers or 4
+    reload = args.reload
+
+    if reload:
+        settings.ENVIRONMENT = "dev"
+
+    import watchfiles
+    from pathlib import Path
+            
+    RELOAD_DIRS = [
+        Path("app"),
+        Path("src"),
+    ] if settings.ENVIRONMENT == "dev" else None
+
+    original_watch = watchfiles.watch
+    def patched_watch(*_, **kwargs): # Ignore CWD path that uvicorn passes as args to watchfiles.watch
+        print(_)
+        return original_watch(*RELOAD_DIRS, **kwargs)
+    watchfiles.watch = patched_watch
 
     uvicorn.run(
         "main:app",

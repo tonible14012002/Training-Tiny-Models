@@ -12,6 +12,15 @@ class PhaseRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
+    async def _get_by_phase_path(self, pipeline_id: str, phase_path: str) -> Optional[PipelinePhase]:
+        """Internal helper to get phase by pipeline_id and phase_path"""
+        statement = select(PipelinePhase).where(
+            PipelinePhase.pipeline_id == pipeline_id,
+            PipelinePhase.phase_path == phase_path
+        )
+        result = await self.session.execute(statement)
+        return result.scalars().first()
+
     async def create(
         self,
         pipeline_id: str,
@@ -36,6 +45,9 @@ class PhaseRepository:
         Returns:
             The created PipelinePhase
 
+        Raises:
+            ValueError: If trying to create duplicate child (same phase_path already exists)
+
         Phase path structure:
             - Base phase: phase_path=""
             - 1st child: phase_path="<base_phase_id>"
@@ -54,6 +66,18 @@ class PhaseRepository:
                 else:
                     # Previous has a path, append its ID
                     phase_path = f"{previous_phase.phase_path}/{previous_phase.id}"
+
+        # Validate uniqueness: ensure only one direct child per phase
+        # (i.e., ensure unique (phase_order, phase_path) tuple when phase_order != 0 or phase_path != "")
+        if phase_number != 0 or phase_path != "":
+            # Check if a phase with the same phase_path already exists for this pipeline
+            existing = await self._get_by_phase_path(pipeline_id, phase_path)
+            if existing:
+                raise ValueError(
+                    f"Cannot create phase: a direct child with phase_path='{phase_path}' "
+                    f"already exists (phase_id={existing.id}, phase_number={existing.phase_number}). "
+                    f"Each phase can only have one direct child."
+                )
 
         phase = PipelinePhase(
             pipeline_id=pipeline_id,
@@ -316,11 +340,15 @@ class PhaseRepository:
         if not root_phase or root_phase.phase_path != "":
             return []
 
-        # Get all phases that start with this root phase ID in their path
+        # Get all phases in this sequence:
+        # 1. The root phase itself (id == root_phase_id)
+        # 2. Direct children (phase_path == root_phase_id)
+        # 3. Deeper descendants (phase_path starts with root_phase_id/)
         statement = select(PipelinePhase).where(
             PipelinePhase.pipeline_id == pipeline_id,
             (PipelinePhase.id == root_phase_id) |
-            (PipelinePhase.phase_path.like(f"{root_phase_id}%"))
+            (PipelinePhase.phase_path == root_phase_id) |
+            (PipelinePhase.phase_path.like(f"{root_phase_id}/%"))
         ).order_by(PipelinePhase.phase_number)
 
         result = await self.session.execute(statement)

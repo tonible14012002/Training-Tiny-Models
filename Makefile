@@ -4,6 +4,10 @@ export PYTHONPATH=./
 start:
 	python app/main.py
 
+start-dev:
+	python app/main.py --reload --port 8001
+
+
 run-cmd:
 	python cmd/$(file).py
 

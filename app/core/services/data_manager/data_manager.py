@@ -18,7 +18,6 @@ class DataManager:
         self.label_config = label_config
         self.cache_dir = base_dir
         self.LOCAL_FILE = f'{self.cache_dir}/.data.jsonl'
-        self.base_dir = base_dir
         if absolute_dir:
             self.cache_dir = absolute_dir.replace('/.data.jsonl', '')
             self.LOCAL_FILE = absolute_dir

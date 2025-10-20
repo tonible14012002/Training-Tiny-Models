@@ -19,19 +19,12 @@ class DataGeneratorV2:
         self.prompt_mgr = prompt_mgr
         self.data_manager = data_manager
 
-    async def fresh_gen(self, human_seeds: List[Sample], expect_total_message: int = None) -> List[Sample]:
-        """Generate fresh data using the default prompt"""
-        # Use provided target or default
-        parallel_generations, total_message_per_batch, batches = self._calculate_v2_generation_params(expect_total_message)
-        prompt = self.prompt_mgr.get_prompt(self.SEED_PROMPT_KEY)
-
-        return await self.iterative_gen(human_seeds, prompt, parallel_generations, total_message_per_batch, batches)
-
     async def fresh_gen_v2(
         self,
         human_seeds: List[Sample],
         expect_total_each_label: Dict[Union[str, int], int],
-        on_batch_generated: Optional[Callable[[int, List[Sample], str], Awaitable[None]]] = None
+        on_batch_generated: Optional[Callable[[int, List[Sample], str], Awaitable[None]]] = None,
+        composal_ds_mgr: Optional[DataManager] = None
     ) -> tuple[List[Sample], str]:
         """Generate fresh data with label-based quantity tracking
 
@@ -89,8 +82,8 @@ class DataGeneratorV2:
                 seed_examples = random.sample(human_seeds, k=min(len(human_seeds), 2))
             else:
                 # Subsequent iterations: mix previous batch results with human seeds
-                new_seed = random.sample(previous_batch_results, k=min(len(previous_batch_results), 2))
-                new_human_seeds = random.sample(human_seeds, k=min(len(human_seeds), 6))
+                new_seed = random.sample(previous_batch_results, k=min(len(previous_batch_results), 6))
+                new_human_seeds = random.sample(human_seeds, k=min(len(human_seeds), 2))
                 seed_examples = new_seed + new_human_seeds
 
             # Generate parallel batches with rebalance instruction
@@ -106,14 +99,19 @@ class DataGeneratorV2:
             for results in parallel_results:
                 batch_results.extend(results)
 
-            # Deduplicate within the batch and against all_results so far
-            combined_for_dedup = all_results + batch_results
-            internal_deduped = await self.data_manager._dedup_helper.deduplicate(combined_for_dedup)
+            # Step 1: Deduplicate within the batch and against all_results so far (internal dedup)
+            internal_deduped = await self.data_manager._dedup_helper.deduplicate(batch_results)
+            internal_deduped = await self.data_manager._dedup_helper.filter_against_existing(internal_deduped, all_results)
 
-            # Get only the new unique samples (not in all_results)
+            # If provided composal file => should also filter against existing composal data
+            if composal_ds_mgr:
+                internal_deduped = await composal_ds_mgr.filter(internal_deduped)
+
             new_unique = [s for s in internal_deduped if s not in all_results]
 
-            # Add new unique samples to quantity tracker (only if not exceeding target)
+            logger.debug(f"Internal dedup: {len(batch_results)} -> {len(new_unique)} samples")
+
+            # Step 3: Add externally filtered samples to quantity tracker (only if not exceeding target)
             added_samples = []
             added_count = 0
             for sample in new_unique:
@@ -153,6 +151,9 @@ class DataGeneratorV2:
 
         # Use hard_save to overwrite the file with exact final samples
         self.data_manager.hard_save(final_samples)
+        if composal_ds_mgr:
+            # Append new examples to composal dataset manager as well
+            composal_ds_mgr.save(final_samples)
 
         logger.info(f"Final dataset saved to: {self.data_manager.LOCAL_FILE}, temp backup at: {temp_file_path}")
 
@@ -220,26 +221,6 @@ class DataGeneratorV2:
             priority_str = ", ".join(priority_parts)
             return f"\n\n**IMPORTANT**: Focus on generating more samples with this priority: {priority_str}. Generate more examples for labels that need the most samples."
 
-    def _get_remaining_counts(
-        self,
-        current_counts: Dict[Union[str, int], int],
-        expected_counts: Dict[Union[str, int], int]
-    ) -> Dict[Union[str, int], int]:
-        """
-        Calculate remaining samples needed for each label.
-
-        Args:
-            current_counts: Current sample count for each label
-            expected_counts: Expected/target sample count for each label
-
-        Returns:
-            Dictionary of remaining samples needed for each label
-        """
-        return {
-            label: max(0, expected_counts[label] - current_counts.get(label, 0))
-            for label in expected_counts.keys()
-        }
-
     def _append_to_file(self, file_path, samples: List[Sample]):
         """Append samples to a file in JSONL format"""
         import json
@@ -247,131 +228,6 @@ class DataGeneratorV2:
             for sample in samples:
                 json.dump({"msg": sample.msg, "label": sample.label}, f, ensure_ascii=False)
                 f.write('\n')
-        
-    async def iterative_gen(self, human_seeds: List[Sample], prompt: str, parallel_generations: int = None, total_message_per_batch: int = None, total_batches: int = None, track_saved: bool = False) -> tuple[List[Sample], List[Sample]] | List[Sample]:
-        """Core generation logic that can be reused with different prompts
-
-        Args:
-            human_seeds: Initial seed samples for generation
-            prompt: Prompt to use for generation
-            parallel_generations: Number of parallel generations to run
-            total_message_per_batch: Number of messages per batch
-            total_batches: Total number of batches to run
-            track_saved: If True, returns (all_results, saved_samples). If False, returns all_results only
-
-        Returns:
-            If track_saved=False: List of all generated samples
-            If track_saved=True: Tuple of (all_results, saved_samples) where saved_samples are the deduplicated ones
-        """
-        saved_samples = [] if track_saved else None
-
-        # First iterate with parallel generation
-        seed_examples = random.sample(human_seeds, k=min(len(human_seeds), 2))
-
-        # Generate parallel batches
-        generation_tasks = []
-        for _ in range(parallel_generations):
-            generation_tasks.append(self._gen(seed_examples, prompt, total_message_per_batch))
-
-        # Run all generations in parallel
-        parallel_results = await asyncio.gather(*generation_tasks)
-
-        # Combine all parallel results
-        all_results = []
-        for results in parallel_results:
-            all_results.extend(results)
-
-        # Deduplicate within the combined results
-        internal_deduped = await self.data_manager._dedup_helper.deduplicate(all_results)
-        
-        # Filter against existing data
-        filtered_results = await self.data_manager.filter(internal_deduped)
-        self.data_manager.save(filtered_results)
-        # FIXME: 
-        # Additional steps to store the saved samples
-
-        if track_saved:
-            saved_samples.extend(filtered_results)
-
-        # Subsequent batches with parallel generation
-        for _ in range(total_batches - 1):
-            # Create seeds for each parallel generation
-            generation_tasks = []
-            for _ in range(parallel_generations):
-                # Make new seed for each parallel task
-                new_seed = random.sample(all_results, k=min(len(all_results), 2))
-                new_human_seeds = random.sample(human_seeds, k=min(len(human_seeds), 6))
-                seed = new_seed + new_human_seeds
-                generation_tasks.append(self._gen(seed, prompt))
-
-            # Run parallel generations
-            parallel_results = await asyncio.gather(*generation_tasks)
-            logger.debug(f"Generated {sum(len(results) for results in parallel_results)} new examples across {parallel_generations} parallel tasks")
-
-            # Combine all parallel results
-            batch_results = []
-            for results in parallel_results:
-                batch_results.extend(results)
-
-            # Deduplicate within the batch
-            internal_deduped = await self.data_manager._dedup_helper.deduplicate(batch_results)
-
-            # Filter against existing data and save
-            new_data = await self.data_manager.filter(internal_deduped)
-            self.data_manager.save(new_data)
-
-            if track_saved:
-                saved_samples.extend(new_data)
-
-            # Update all_results for next iteration
-            all_results.extend(batch_results)
-
-        if track_saved:
-            return all_results, saved_samples
-        return all_results
-
-    async def fix_gen(self, human_seeds: List[Sample], prompt: str, amount: int = None) -> tuple[List[Sample], str, int]:
-        """Generate data using a custom prompt from PromptBuilder for fixing errors
-
-        This method:
-        1. Deduplicates and filters against existing data (standard behavior)
-        2. Appends deduplicated data to the main data file
-        3. Also saves deduplicated data to a separate versioned file for tracking
-
-        Returns:
-            Tuple of (all_results, versioned_file_path, saved_count)
-            - all_results: List of all generated samples (before deduplication)
-            - versioned_file_path: Path to the versioned file created
-            - saved_count: Number of samples saved after deduplication
-        """
-        # Use provided amount or default
-        target_messages = amount
-
-        # Calculate generation parameters
-        parallel_generations, total_message_per_batch, total_batches = self._calculate_v2_generation_params(target_messages)
-        logger.info(f"Fix generation: targeting {target_messages} messages with {parallel_generations} parallel calls, {total_message_per_batch} per call, {total_batches} batches")
-
-        # Track saved samples to save them to a separate file
-        all_results, saved_samples = await self.iterative_gen(
-            human_seeds, prompt, parallel_generations, total_message_per_batch, total_batches, track_saved=True
-        )
-
-        # Generate a unique suffix with timestamp
-        from datetime import datetime
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        file_suffix = f"fix_gen_{timestamp}"
-
-        # Save deduplicated samples to a separate versioned file
-        versioned_file_path = None
-        saved_count = len(saved_samples) if saved_samples else 0
-
-        if saved_samples:
-            versioned_file_path = self.data_manager.save_to_versioned_file(saved_samples, file_suffix)
-            logger.info(f"Saved {saved_count} deduplicated samples to {versioned_file_path}")
-        else:
-            logger.info("No new samples were saved after deduplication")
-
-        return all_results, versioned_file_path, saved_count
 
     def _calculate_v2_generation_params(self, expect_total_message: int) -> tuple[int, int, int]:
         """
@@ -384,7 +240,7 @@ class DataGeneratorV2:
             Tuple of (PARALLEL_GENERATIONS, TOTAL_MESSAGE_PER_BATCH, batches_needed)
         """
         # Each API call generates ~30 messages
-        messages_per_api_call = 30
+        messages_per_api_call = 40
 
         # For V2, we run parallel generations, so total per batch = parallel_gens * messages_per_api_call
         # But we also run multiple batches, so: total = parallel_gens * messages_per_api_call * batches

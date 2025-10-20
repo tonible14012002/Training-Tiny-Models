@@ -3,8 +3,6 @@ from typing import Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings
-import watchfiles
-from pathlib import Path
 
 
 class Settings(BaseSettings):
@@ -51,14 +49,3 @@ class Settings(BaseSettings):
 
 settings = Settings()
 os.environ["HF_HOME"] = "./.cache"
-    
-RELOAD_DIRS = [
-    Path("app"),
-    Path("src"),
-] if settings.ENVIRONMENT == "dev" else None
-
-original_watch = watchfiles.watch
-def patched_watch(*_, **kwargs): # Ignore CWD path that uvicorn passes as args to watchfiles.watch
-    print(_)
-    return original_watch(*RELOAD_DIRS, **kwargs)
-watchfiles.watch = patched_watch
