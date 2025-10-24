@@ -288,16 +288,41 @@ class TrainedModel(SQLModel, table=True):
     training_time: Optional[float] = Field(default=None)  # Training time in seconds
     dataset_file_id: Optional[str] = Field(default=None, foreign_key="dataset_file.id")
     training_params: Optional[str] = Field(default=None)  # JSON string with training parameters
+    training_argument_profile_id: Optional[str] = Field(default=None, foreign_key="training_argument_profile.id")
+    train_type: Optional[str] = Field(default=None, max_length=50)  # Extendable enum: FROM_SCRATCH, CONTINUE, etc.
+    description: Optional[str] = Field(default=None)  # Textual description of how dataset was combined
     status: str = Field(default="training", max_length=50)  # training, completed, failed
     created_at: datetime = Field(default_factory=utc_now)
     completed_at: Optional[datetime] = Field(default=None)
 
     # Relationships
     evaluation_results: List["EvaluationResult"] = Relationship(back_populates="trained_model")
+    training_profile: Optional["TrainingArgumentProfile"] = Relationship()
 
     def get_training_params(self) -> Optional[dict]:
         """Parse training_params JSON string to dict"""
         return json.loads(self.training_params) if self.training_params else None
+
+
+class TrainingArgumentProfile(SQLModel, table=True):
+    """Training argument profile table for storing reusable training configurations"""
+    __tablename__ = "training_argument_profile"
+
+    id: str = Field(default_factory=generate_uuid, primary_key=True)
+    name: str = Field(max_length=255, unique=True)
+    description: Optional[str] = Field(default=None)
+    training_config: str = Field()  # JSON string: learning_rate, batch_size, epochs, etc.
+    lora_config: str = Field()  # JSON string: r, lora_alpha, target_modules, etc.
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+    def get_training_config(self) -> dict:
+        """Parse training_config JSON string to dict"""
+        return json.loads(self.training_config)
+
+    def get_lora_config(self) -> dict:
+        """Parse lora_config JSON string to dict"""
+        return json.loads(self.lora_config)
 
 
 class EvaluationResult(SQLModel, table=True):

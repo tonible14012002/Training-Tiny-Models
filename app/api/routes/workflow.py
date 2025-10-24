@@ -85,7 +85,7 @@ async def continual_train_model(
         ds = data_manager.to_datasets(file_path=dataset_path)
 
         # Continue training from the specified checkpoint (supports both "10" and "10.1" formats)
-        new_checkpoint_id = await trainer_service.continual_train(
+        new_checkpoint_id, training_config = await trainer_service.continual_train(
             checkpoint_id=checkpoint_id,
             dataset=ds,
             inference_type=inference_type
@@ -97,6 +97,7 @@ async def continual_train_model(
             "base_checkpoint": checkpoint_id,
             "inference_type": inference_type,
             "dataset_path": dataset_path or data_manager.LOCAL_FILE,
+            "training_config": training_config,
             "message": f"Continual training completed. New checkpoint: {new_checkpoint_id}"
         }
     except Exception as e:

@@ -74,8 +74,13 @@ class DataManager:
                 f.write(f"{s}\n")
 
 
-    async def filter(self, data: List[Sample]) -> List[Sample]:
-        """Filter new data against existing data in the local file."""
+    async def filter(self, data: List[Sample]):
+        """Filter new data against existing data in the local file.
+
+        Returns:
+            FilterResult with accepted and rejected samples
+        """
+        from app.core.mixins.deduplication import FilterResult
         existing_data = self.load()
         return await self._dedup_helper.filter_against_existing(data, existing_data)
     

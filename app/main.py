@@ -46,6 +46,15 @@ async def lifespan(app: FastAPI):
         api_key=settings.OPENAI_API_KEY,
         temperature=0.7,
         num_retries=2,
+        max_tokens=4096,
+    ))
+
+    teacher_llm_high = LiteLLMProvider(LLMSettings(
+        llm_model_name="gpt-4.1",
+        api_key=settings.OPENAI_API_KEY,
+        temperature=0.7,
+        num_retries=2,
+        max_tokens=4096,
     ))
 
     categorizer_llm = LiteLLMProvider(LLMSettings(
@@ -64,6 +73,7 @@ async def lifespan(app: FastAPI):
 
     # Store shared services (services that don't depend on label_config)
     app.state.teacher_llm = teacher_llm
+    app.state.teacher_llm_high = teacher_llm_high
     app.state.prompt_mgr = prompt_mgr
     app.state.categorizer_llm = categorizer_llm
 

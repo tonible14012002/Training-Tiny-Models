@@ -17,17 +17,36 @@ class TrainedModelRepository:
         phase_id: str,
         model_name: str,
         model_save_path: str,
+        train_type: str,
         dataset_file_id: Optional[str] = None,
         training_params: Optional[str] = None,
+        training_argument_profile_id: Optional[str] = None,
+        description: Optional[str] = None,
         status: str = "training"
     ) -> TrainedModel:
-        """Create a new trained model record"""
+        """Create a new trained model record
+
+        Args:
+            phase_id: The phase ID this model belongs to
+            model_name: Name of the model
+            model_save_path: Path where the model is saved
+            train_type: Type of training (e.g., FROM_SCRATCH, CONTINUE)
+            dataset_file_id: Optional dataset file ID
+            training_params: Optional JSON string with training parameters
+            training_argument_profile_id: Optional training argument profile ID
+            description: Optional textual description of how dataset was combined
+            status: Training status (default: training)
+        """
+
         trained_model = TrainedModel(
             phase_id=phase_id,
             model_name=model_name,
             model_save_path=model_save_path,
+            train_type=train_type,
             dataset_file_id=dataset_file_id,
             training_params=training_params,
+            training_argument_profile_id=training_argument_profile_id,
+            description=description,
             status=status
         )
         self.session.add(trained_model)
@@ -39,13 +58,30 @@ class TrainedModelRepository:
         """Get trained model by ID"""
         return await self.session.get(TrainedModel, model_id)
 
-    async def get_by_phase(self, phase_id: str):
+    async def get_by_phase(self, phase_id: str) -> List[TrainedModel]:
         """Get all trained models for a phase"""
         statement = select(TrainedModel).where(
             TrainedModel.phase_id == phase_id
         ).order_by(TrainedModel.created_at.desc())
         result = await self.session.execute(statement)
         return list(result.scalars().all())
+
+    async def get_by_phase_and_train_type(self, phase_id: str, train_type: str) -> Optional[TrainedModel]:
+        """Get a trained model by phase_id and train_type
+
+        Args:
+            phase_id: The phase ID
+            train_type: The training type (e.g., FROM_SCRATCH, CONTINUE)
+
+        Returns:
+            The TrainedModel if found, None otherwise
+        """
+        statement = select(TrainedModel).where(
+            TrainedModel.phase_id == phase_id,
+            TrainedModel.train_type == train_type
+        )
+        result = await self.session.execute(statement)
+        return result.scalars().first()
 
     async def get_latest_by_phase(self, phase_id: str) -> Optional[TrainedModel]:
         """Get the latest trained model for a phase"""

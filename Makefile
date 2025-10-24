@@ -2,10 +2,10 @@
 export PYTHONPATH=./
 
 start:
-	python app/main.py
+	python app/main.py --reload --port 8000
 
 start-dev:
-	python app/main.py --reload --port 8001
+	python app/main.py --reload --port 8003
 
 
 run-cmd:

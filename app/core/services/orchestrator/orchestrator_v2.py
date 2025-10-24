@@ -16,7 +16,7 @@ class AutoPipelineV2:
         prompt_mgr = InmemoryPromptManager()
         data_manager = services.DataManager(
             label_config=label_config,
-            rouge_threshold=0.6,
+            rouge_threshold=0.65,
             base_dir=f'{base_dir}/data'
         )
 
@@ -69,7 +69,7 @@ class AutoPipelineV2:
         )
 
         ds = self.data_generator.data_manager.to_datasets()
-        base_checkpoint_id = await self.trainer_service.train(ds, "prob")
+        base_checkpoint_id, _ = await self.trainer_service.train(ds, "prob")
         human_eval_ds = self.load_frozen_human_eval()
 
         inferencer = ProbModelInference(

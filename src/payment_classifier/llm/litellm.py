@@ -34,7 +34,7 @@ class LiteLLMProvider(BaseLLM):
         self._batch_delay = settings.batch_delay
 
     async def _retry_with_rate_limit_handling(self, func, *args, **kwargs):
-        """Wrapper to handle rate limit errors with exponential backoff.
+        """Wrapper to handle any errors with retry and 10-second delay.
 
         Args:
             func: The async function to call
@@ -45,34 +45,36 @@ class LiteLLMProvider(BaseLLM):
             The result from the function call
 
         Raises:
-            RateLimitError: If max retries exceeded
+            Exception: If max retries exceeded
         """
         for attempt in range(self._max_rate_limit_retries):
             try:
                 return await func(*args, **kwargs)
-            except RateLimitError as e:
+            except Exception as e:
+                # Print detailed error message from OpenAI/LiteLLM
+                error_type = type(e).__name__
+                error_msg = str(e)
+
+                # Try to extract more details from the exception
+                additional_info = ""
+                if hasattr(e, 'response'):
+                    additional_info += f"\nResponse: {e.response}"
+                if hasattr(e, 'status_code'):
+                    additional_info += f"\nStatus Code: {e.status_code}"
+                if hasattr(e, 'message'):
+                    additional_info += f"\nMessage: {e.message}"
+
+                logger.error(f"Error occurred ({error_type}): {error_msg}{additional_info}")
+
+                # If this is the last attempt, raise the error
                 if attempt == self._max_rate_limit_retries - 1:
-                    logger.error(f"Rate limit retry exhausted after {self._max_rate_limit_retries} attempts")
+                    logger.error(f"Max retries ({self._max_rate_limit_retries}) exhausted, giving up")
                     raise
 
-                # Exponential backoff: 5s, 10s, 20s, 40s, 80s
-                wait_time = self._rate_limit_retry_delay * (2 ** attempt)
-                logger.warning(f"Rate limit hit: {str(e)}")
+                # Wait 10 seconds before retrying
+                wait_time = 10
                 logger.info(f"Waiting {wait_time}s before retry (attempt {attempt + 1}/{self._max_rate_limit_retries})...")
                 await asyncio.sleep(wait_time)
-            except Exception as e:
-                # Check if the error message contains rate limit information (some APIs wrap it differently)
-                error_msg = str(e).lower()
-                if "rate limit" in error_msg or "ratelimit" in error_msg:
-                    if attempt == self._max_rate_limit_retries - 1:
-                        logger.error(f"Rate limit retry exhausted after {self._max_rate_limit_retries} attempts")
-                        raise
-
-                    # Exponential backoff: 5s, 10s, 20s, 40s, 80s
-                    wait_time = self._rate_limit_retry_delay * (2 ** attempt)
-                    logger.warning(f"Rate limit detected in error: {str(e)}")
-                    logger.info(f"Waiting {wait_time}s before retry (attempt {attempt + 1}/{self._max_rate_limit_retries})...")
-                    await asyncio.sleep(wait_time)
 
     async def _generate_output(self, prompts: List[Dict[str, str]]) -> str:
         """Generate a text completion using LiteLLM.

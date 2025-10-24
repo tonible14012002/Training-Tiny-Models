@@ -308,12 +308,26 @@ class TestTrainPhaseRequest(BaseModel):
     )
 
 class StartTrainPhase(BaseModel):
-    phase_id: str = Field(
+    training_argument_profile_id: Optional[str] = Field(
+        default=None,
+        description="Optional ID of the training argument profile to use for training"
+    )
+
+class StartContinualTrainPhase(BaseModel):
+    trained_model_id: str = Field(
         ...,
-        description="The ID of the phase to train"
+        description="The ID of the previous trained model to continue training from"
+    )
+    training_argument_profile_id: Optional[str] = Field(
+        default=None,
+        description="Optional ID of the training argument profile to use for training"
     )
 
 class StartEvaluationPhase(BaseModel):
+    trained_model_id: str = Field(
+        ...,
+        description="The ID of the trained model to evaluate"
+    )
     confidence_thresholds: float = Field(
         0.5,
         description="Confidence threshold for filter low confidence predictions"
@@ -358,3 +372,201 @@ class PHASE_STATUS:
 class DATASET_FILE_STATUS:
     GENERATING = "generating"
     DONE = "done"
+
+class TrainingConfig(BaseModel):
+    """Schema for training arguments configuration"""
+    learning_rate: Optional[float] = Field(
+        default=2e-5,
+        description="Learning rate for training"
+    )
+    per_device_train_batch_size: Optional[int] = Field(
+        default=8,
+        description="Batch size per device during training"
+    )
+    per_device_eval_batch_size: Optional[int] = Field(
+        default=16,
+        description="Batch size per device during evaluation"
+    )
+    gradient_accumulation_steps: Optional[int] = Field(
+        default=4,
+        description="Number of gradient accumulation steps"
+    )
+    num_train_epochs: Optional[int] = Field(
+        default=3,
+        description="Total number of training epochs"
+    )
+    warmup_ratio: Optional[float] = Field(
+        default=0.15,
+        description="Ratio of total training steps for warmup"
+    )
+    weight_decay: Optional[float] = Field(
+        default=0.01,
+        description="Weight decay for regularization"
+    )
+    max_grad_norm: Optional[float] = Field(
+        default=1.0,
+        description="Maximum gradient norm for clipping"
+    )
+    logging_steps: Optional[int] = Field(
+        default=10,
+        description="Number of steps between logging"
+    )
+    save_steps: Optional[int] = Field(
+        default=500,
+        description="Number of steps between checkpoints"
+    )
+    eval_steps: Optional[int] = Field(
+        default=100,
+        description="Number of steps between evaluations"
+    )
+    save_strategy: Optional[str] = Field(
+        default="steps",
+        description="Checkpoint save strategy (steps, epoch, no)"
+    )
+    eval_strategy: Optional[str] = Field(
+        default="no",
+        description="Evaluation strategy (steps, epoch, no)"
+    )
+    load_best_model_at_end: Optional[bool] = Field(
+        default=False,
+        description="Whether to load the best model at the end of training"
+    )
+    metric_for_best_model: Optional[str] = Field(
+        default=None,
+        description="Metric to use for determining best model"
+    )
+    greater_is_better: Optional[bool] = Field(
+        default=True,
+        description="Whether higher metric value is better"
+    )
+    seed: Optional[int] = Field(
+        default=42,
+        description="Random seed for reproducibility"
+    )
+
+    class Config:
+        extra = "allow"  # Allow additional fields for flexibility
+
+class LoRAConfig(BaseModel):
+    """Schema for LoRA configuration
+
+    Must match the structure in TrainerService.lora_config
+    """
+    r: int = Field(
+        default=16,
+        description="LoRA rank",
+        ge=1,
+        le=256
+    )
+    lora_alpha: int = Field(
+        default=32,
+        description="LoRA alpha parameter",
+        ge=1,
+        le=256
+    )
+    lora_dropout: float = Field(
+        default=0.1,
+        description="LoRA dropout rate",
+        ge=0.0,
+        le=1.0
+    )
+    bias: str = Field(
+        default="none",
+        description="Bias configuration (none, all, lora_only)"
+    )
+    target_modules: List[str] = Field(
+        default=["query", "value", "dense"],
+        description="Target modules for LoRA adaptation"
+    )
+
+    @classmethod
+    def model_validate(cls, value):
+        """Validate LoRA config matches TrainerService expectations"""
+        if isinstance(value, dict):
+            # Validate bias field
+            if "bias" in value and value["bias"] not in ["none", "all", "lora_only"]:
+                raise ValueError(f"Invalid bias value: {value['bias']}. Must be one of: none, all, lora_only")
+
+            # Validate target_modules is a list
+            if "target_modules" in value and not isinstance(value["target_modules"], list):
+                raise ValueError("target_modules must be a list of strings")
+
+        return super().model_validate(value)
+
+class CreateTrainingArgumentProfileRequest(BaseModel):
+    """Request schema for creating a training argument profile"""
+    name: str = Field(
+        ...,
+        description="Unique name for the profile",
+        examples=["default", "fast-training", "high-accuracy"]
+    )
+    description: Optional[str] = Field(
+        default=None,
+        description="Optional description of the profile"
+    )
+    training_config: TrainingConfig = Field(
+        ...,
+        description="Training configuration parameters"
+    )
+    lora_config: LoRAConfig = Field(
+        ...,
+        description="LoRA configuration parameters"
+    )
+
+class UpdateTrainingArgumentProfileRequest(BaseModel):
+    """Request schema for updating a training argument profile"""
+    name: Optional[str] = Field(
+        default=None,
+        description="New name for the profile"
+    )
+    description: Optional[str] = Field(
+        default=None,
+        description="New description"
+    )
+    training_config: Optional[TrainingConfig] = Field(
+        default=None,
+        description="New training configuration"
+    )
+    lora_config: Optional[LoRAConfig] = Field(
+        default=None,
+        description="New LoRA configuration"
+    )
+
+class TrainingArgumentProfileResponse(BaseModel):
+    """Response schema for training argument profile"""
+    id: str
+    name: str
+    description: Optional[str]
+    training_config: Dict[str, Any]
+    lora_config: Dict[str, Any]
+    created_at: str
+    updated_at: str
+
+class ModelInferenceRequest(BaseModel):
+    """Request schema for model inference"""
+    model_path: str = Field(
+        ...,
+        description="Path to the trained model checkpoint"
+    )
+    texts: List[str] = Field(
+        ...,
+        description="List of texts to classify",
+        min_length=1
+    )
+    pipeline_id: str = Field(
+        ...,
+        description="Pipeline ID to get label configuration"
+    )
+
+class PredictionResult(BaseModel):
+    """Single prediction result"""
+    text: str
+    label: str
+    probability: float
+    all_probabilities: Dict[str, float]
+
+class ModelInferenceResponse(BaseModel):
+    """Response schema for model inference"""
+    message: str
+    predictions: List[PredictionResult]
+    model_info: Dict[str, Any]

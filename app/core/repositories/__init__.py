@@ -4,6 +4,7 @@ from .error_bucket_repository import *
 from .dataset_repository import *
 from .trained_model_repository import *
 from .evaluation_result_repository import *
+from .training_argument_profile_repository import *
 
 __all__ = [
     "PipelineRepository",
@@ -15,4 +16,5 @@ __all__ = [
     "BatchGeneratedDatasetFileRepository",
     "TrainedModelRepository",
     "EvaluationResultRepository",
+    "TrainingArgumentProfileRepository",
 ]

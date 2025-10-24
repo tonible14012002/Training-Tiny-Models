@@ -1,9 +1,19 @@
-from typing import List
+from typing import List, Tuple
+from pydantic import BaseModel
 from app.core.schemas import Sample
 from app.utils.scorer import EvaluationUtils
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+class FilterResult(BaseModel):
+    """Result of deduplication/filtering operation"""
+    accepted: List[Sample]
+    rejected: List[Tuple[Sample, str]]  # (sample, reason)
+
+    class Config:
+        arbitrary_types_allowed = True
 
 
 class DeduplicationHelper:
@@ -23,7 +33,7 @@ class DeduplicationHelper:
         """
         self.rouge_threshold = rouge_threshold
 
-    async def deduplicate(self, data: List[Sample]) -> List[Sample]:
+    async def deduplicate(self, data: List[Sample]) -> FilterResult:
         """
         Remove duplicates from a list of samples based on ROUGE-L similarity.
 
@@ -31,9 +41,10 @@ class DeduplicationHelper:
             data: List of samples to deduplicate
 
         Returns:
-            List of deduplicated samples
+            FilterResult with accepted (unique) and rejected (duplicate) samples
         """
         deduped = {}
+        rejected = []
 
         for item in data:
             # First item is always added
@@ -43,6 +54,7 @@ class DeduplicationHelper:
 
             # Check against existing items
             is_unique = True
+            matched_msg = None
             for existing_item in deduped.values():
                 rouge = await EvaluationUtils.score_rouge(
                     ref=existing_item.msg,
@@ -54,15 +66,19 @@ class DeduplicationHelper:
                 # If ROUGE score is above threshold, consider it a duplicate
                 if rouge >= self.rouge_threshold:
                     is_unique = False
+                    matched_msg = existing_item.msg[:50]  # Store first 50 chars for reference
                     break
 
             if is_unique:
                 deduped[item.msg] = item
+            else:
+                reason = f"internal_duplicate (ROUGE-L {rouge:.2f} with '{matched_msg}...')"
+                rejected.append((item, reason))
 
-        logger.debug(f"Deduplicated {len(data)} samples to {len(deduped)} unique samples")
-        return list(deduped.values())
+        logger.debug(f"Deduplicated {len(data)} samples to {len(deduped)} unique samples ({len(rejected)} duplicates)")
+        return FilterResult(accepted=list(deduped.values()), rejected=rejected)
 
-    async def filter_against_existing(self, new_data: List[Sample], existing_data: List[Sample], window_size: int = 1000) -> List[Sample]:
+    async def filter_against_existing(self, new_data: List[Sample], existing_data: List[Sample], window_size: int = 1000) -> FilterResult:
         """
         Filter new data against existing data to avoid duplicates.
         Only compares samples within the same label and uses a sliding window for better performance.
@@ -73,10 +89,10 @@ class DeduplicationHelper:
             window_size: Maximum number of recent samples per label to compare against (default: 1000)
 
         Returns:
-            List of filtered samples that are sufficiently different from existing data
+            FilterResult with accepted (unique) and rejected (duplicate) samples
         """
         if not existing_data:
-            return new_data
+            return FilterResult(accepted=new_data, rejected=[])
 
         # Group existing data by label for efficient lookup
         existing_by_label = {}
@@ -92,9 +108,12 @@ class DeduplicationHelper:
                 existing_by_label[label] = existing_by_label[label][-window_size:]
 
         filtered = []
+        rejected = []
 
         for new_item in new_data:
             is_unique = True
+            matched_msg = None
+            matched_rouge = 0.0
 
             # Only compare against recent existing items with the same label
             same_label_existing = existing_by_label.get(new_item.label, [])
@@ -110,15 +129,20 @@ class DeduplicationHelper:
                 # If ROUGE score is above threshold, consider it too similar
                 if rouge >= self.rouge_threshold:
                     is_unique = False
+                    matched_msg = existing_item.msg[:50]
+                    matched_rouge = rouge
                     break
 
             if is_unique:
                 filtered.append(new_item)
+            else:
+                reason = f"external_duplicate (ROUGE-L {matched_rouge:.2f} with '{matched_msg}...')"
+                rejected.append((new_item, reason))
 
         total_comparisons_before = len(new_data) * len(existing_data) if existing_data else 0
         total_comparisons_after = sum(len(existing_by_label.get(item.label, [])) for item in new_data)
 
-        logger.debug(f"Filtered {len(new_data)} new samples to {len(filtered)} unique samples")
+        logger.debug(f"Filtered {len(new_data)} new samples to {len(filtered)} unique samples ({len(rejected)} duplicates)")
         logger.debug(f"Label-based + sliding window filtering reduced comparisons from {total_comparisons_before} to {total_comparisons_after}")
         logger.debug(f"Window size: {window_size} per label")
-        return filtered
+        return FilterResult(accepted=filtered, rejected=rejected)

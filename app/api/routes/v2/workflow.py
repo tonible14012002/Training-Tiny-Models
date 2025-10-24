@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Request, Body, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Optional
 from app.core import repositories as repos
 from app.api.dependencies import get_db_session
 from app.core import services
 from app.core import schemas
 from src.payment_classifier.inference.prob_inference import ProbModelInference
 from app.utils.dataset_helper import DatasetHelper
+from datasets import concatenate_datasets
 from pathlib import Path
 import shutil
 import random
@@ -175,7 +177,7 @@ async def first_generation(
     # Create DataManager and DataGeneratorV2 instances for this pipeline
     data_manager = services.DataManager(
         label_config=label_config,
-        rouge_threshold=0.6,
+        rouge_threshold=0.65,
         base_dir=f'.cache/{pipeline.id}/{phase.id}/{phase.phase_number}'
     )
 
@@ -183,6 +185,7 @@ async def first_generation(
         llm=request.app.state.teacher_llm,
         prompt_mgr=request.app.state.prompt_mgr,
         data_manager=data_manager,
+        high_llm=request.app.state.teacher_llm_high,
     )
 
     human_seeds = load_human_seed(label_config)
@@ -193,21 +196,22 @@ async def first_generation(
         label_count_dict[key] = 200
 
     # Define callback to save each batch to database
-    async def on_batch_generated(batch_number: int, samples: list, temp_file_path: str):
+    async def on_batch_generated(batch_number: int, samples: list, batch_file_path: str, metadata_path: str):
         """Callback to save batch information to database"""
         batch_repo = repos.BatchGeneratedDatasetFileRepository(db)
         await batch_repo.create_batch_file(
             parent_dataset_file_id=ds_file.id,
-            file_path=temp_file_path,
+            file_path=batch_file_path,
             batch_number=batch_number,
             sample_count=len(samples)
         )
-        logger.info(f"Saved batch {batch_number} with {len(samples)} samples to database")
+        logger.info(f"Saved batch {batch_number} with {len(samples)} samples to database (metadata: {metadata_path})")
 
     # Generate with batch tracking
     generated, path = await data_generator_v2.fresh_gen_v2(
         human_seeds=human_seeds,
         expect_total_each_label=label_count_dict,
+        label_config=label_config,
         on_batch_generated=on_batch_generated
     )
 
@@ -256,7 +260,7 @@ async def test_first_generation(
     # Create DataManager and DataGeneratorV2 instances for testing
     data_manager = services.DataManager(
         label_config=label_config,
-        rouge_threshold=0.6,
+        rouge_threshold=0.65,
         base_dir=f'{payload.cache_path}/test/first-gen/{payload.pipeline_id}'
     )
 
@@ -264,6 +268,7 @@ async def test_first_generation(
         llm=request.app.state.teacher_llm,
         prompt_mgr=request.app.state.prompt_mgr,
         data_manager=data_manager,
+        high_llm=request.app.state.teacher_llm_high,
     )
 
     human_seeds = load_human_seed(label_config)
@@ -278,7 +283,8 @@ async def test_first_generation(
     data_generator_v2.SEED_PROMPT_KEY = "v2/train/seed_open_intent"
     generated, path = await data_generator_v2.fresh_gen_v2(
         human_seeds=human_seeds,
-        expect_total_each_label=label_count_dict
+        expect_total_each_label=label_count_dict,
+        label_config=label_config
     )
 
     return {
@@ -426,7 +432,7 @@ async def test_train_model(
 
     data_mgr = services.DataManager(
         label_config=label_config,
-        rouge_threshold=0.6,
+        rouge_threshold=0.65,
         base_dir=f'{payload.cache_path}/test/{payload.phase_id}'
     )
 
@@ -438,12 +444,19 @@ async def test_train_model(
         base_dir=f'{payload.checkpoint_path}/test/{payload.phase_id}',
     )
 
-    path = await trainer.train(ds, return_full_path=True)
+    path, training_config = await trainer.train(
+        ds,
+        return_full_path=True,
+        custom_training_config={
+            "num_train_epochs": 5 
+        }
+    )
 
     return {
         "message": "Test training completed",
         "data": {
-            "checkpoint_path": path
+            "checkpoint_path": path,
+            "training_config": training_config
         }
     }
 
@@ -493,14 +506,16 @@ async def test_evaluation(
 @router.post("/phase/{phase_id}/train")
 async def train_model(
     phase_id: str,
+    payload: Optional[schemas.StartTrainPhase] = None,
     db: AsyncSession = Depends(get_db_session),
     request: Request = None,
 ):
     '''
-    1. Load Datasets from generation Phase
-    2. Train model using TrainerService
-    3. TrainedRepository - save trained model info, ref DatasetFile, Phase
-    4. Return trained model info
+    1. Load training pool (composal dataset) from parent phase
+    2. Optionally load training argument profile if provided
+    3. Train model using TrainerService on the entire training pool
+    4. TrainedRepository - save trained model info, ref current phase's DatasetFile
+    5. Return trained model info
     '''
     phase = await repos.PhaseRepository(db).get_by_id(phase_id)
     if not phase:
@@ -511,31 +526,76 @@ async def train_model(
         return {"error": "Pipeline or label config not found"}
     label_config = pipeline.label_configs[0]  # Get the first label config
 
-    # Fetch ds_file for phase
+    # Fetch current phase's dataset file (for reference only)
     ds_file = (await repos.DatasetFileRepository(db).get_by_phase(phase_id))[0]
     if not ds_file:
         return {"error": "Dataset file not found for phase"}
 
-    # Create DataManager instance for this pipeline's label config
-    data_manager = services.DataManager(
-        label_config=label_config,
-        rouge_threshold=0.6,
-        absolute_dir=ds_file.file_path,
-    )
-    ds = data_manager.to_datasets()
+    # Get the parent (root) phase's composal dataset for training pool
+    parent_phase = await repos.PhaseRepository(db).get_parent_phase(phase.id)
+    if not parent_phase:
+        # This IS the parent phase
+        parent_phase = phase
 
-    checkpoint_path = await services.TrainerService(
+    # Get composal dataset (training pool) from parent phase
+    composal_dataset = await repos.DatasetRepository(db).get_by_phase(parent_phase.id)
+    if not composal_dataset:
+        return {"error": "No training pool (composal dataset) found for parent phase"}
+
+    # Load training pool dataset for training
+    training_pool_ds = services.DataManager(
+        label_config=label_config,
+        rouge_threshold=0.65,
+        absolute_dir=composal_dataset.file_path,
+    ).to_datasets()
+
+    # Load training profile if provided
+    training_profile = None
+    custom_training_config = None
+    if payload and payload.training_argument_profile_id:
+        training_profile = await repos.TrainingArgumentProfileRepository(db).get_by_id(
+            payload.training_argument_profile_id
+        )
+        if not training_profile:
+            return {
+                "error": "Training argument profile not found",
+                "message": f"No profile found with ID: {payload.training_argument_profile_id}"
+            }
+        # Merge training and LoRA configs for the trainer
+        custom_training_config = training_profile.get_training_config()
+
+    checkpoint_path, training_config = await services.TrainerService(
         base_model="prajjwal1/bert-tiny",
         label_config=label_config,
         base_dir=f'.checkpoints/{pipeline.id}/{phase.phase_number}'
-    ).train(ds, return_full_path=True)
+    ).train(training_pool_ds, return_full_path=True, custom_training_config=custom_training_config)
 
-    # Save trained model info
+    # Build description for FROM_SCRATCH training
+    # Get all ancestor phases to build the composal dataset path
+    ancestor_ids = phase.get_ancestor_phase_ids()
+    if ancestor_ids:
+        # Has parent phases
+        ancestor_phases = []
+        for ancestor_id in ancestor_ids:
+            ancestor_phase = await repos.PhaseRepository(db).get_by_id(ancestor_id)
+            if ancestor_phase:
+                ancestor_phases.append(f"phase {ancestor_phase.phase_number}")
+        phase_path_str = " -> ".join(ancestor_phases) + f" -> phase {phase.phase_number}"
+        description = f"Trained from base model with composal dataset ({phase_path_str})"
+    else:
+        # Root phase
+        description = f"Trained from base model with composal dataset (phase {phase.phase_number})"
+
+    # Save trained model info - reference current phase's dataset file
     trained_info = await repos.TrainedModelRepository(db).create(
         phase_id=phase_id,
         model_name="Payment Classification Model v" + str(phase.phase_number),
         model_save_path=checkpoint_path,
-        dataset_file_id=ds_file.id,
+        train_type="FROM_SCRATCH",
+        dataset_file_id=ds_file.id,  # Reference to current phase's dataset file
+        training_params=training_config,  # Save training configuration
+        training_argument_profile_id=payload.training_argument_profile_id if payload else None,
+        description=description,
         status="DONE",
     )
 
@@ -543,6 +603,125 @@ async def train_model(
         "message": "Model trained successfully",
         "data": trained_info.model_dump(),
     }
+
+@router.post("/phase/{phase_id}/continual-train")
+async def continual_train_model(
+    phase_id: str,
+    payload: schemas.StartContinualTrainPhase,
+    db: AsyncSession = Depends(get_db_session),
+    request: Request = None,
+):
+    '''
+    1. Load Datasets from current Phase and previous Phase
+    2. Combine datasets with 3:7 ratio (previous:current)
+    3. Continual train model using TrainerService from specified previous model checkpoint
+    4. TrainedRepository - save trained model info, ref DatasetFile, Phase
+    '''
+    phase = await repos.PhaseRepository(db).get_by_id(phase_id)
+    if not phase:
+        return {"error": "Phase not found"}
+
+    pipeline = await repos.PipelineRepository(db).get_by_id(phase.pipeline_id)
+    if not pipeline or not pipeline.label_configs:
+        return {"error": "Pipeline or label config not found"}
+    label_config = pipeline.label_configs[0]  # Get the first label config
+
+    # Get the specified previous trained model
+    prev_trained_model = await repos.TrainedModelRepository(db).get_by_id(payload.trained_model_id)
+    if not prev_trained_model:
+        return {
+            "error": "Previous trained model not found",
+            "message": f"No trained model found with ID: {payload.trained_model_id}"
+        }
+
+    # Get previous phase from the trained model
+    prev_phase = await repos.PhaseRepository(db).get_by_id(prev_trained_model.phase_id)
+    if not prev_phase:
+        return {"error": "Previous phase not found"}
+
+    ds_file = (await repos.DatasetFileRepository(db).get_by_phase(phase_id))[0]
+    if not ds_file:
+        return {"error": "Dataset file not found for phase"}
+
+    prev_ds_file = (await repos.DatasetFileRepository(db).get_by_phase(prev_phase.id))[0]
+    if not prev_ds_file:
+        return {"error": "Dataset file not found for previous phase"}
+
+    # Load datasets
+    ds = services.DataManager(
+        label_config=label_config,
+        rouge_threshold=0.65,
+        absolute_dir=ds_file.file_path,
+    ).to_datasets()
+    prev_ds = services.DataManager(
+        label_config=label_config,
+        rouge_threshold=0.65,
+        absolute_dir=prev_ds_file.file_path,
+    ).to_datasets()
+
+    # Combine datasets with 3:7 ratio (previous:current)
+    expect_old_data = min(round(ds_file.sample_count * 3/7), len(prev_ds))
+    seed = random.randint(0, 1000)
+    prev_ds_subset = prev_ds.shuffle(seed=seed).select(range(expect_old_data))
+    combined_ds = concatenate_datasets([prev_ds_subset, ds])
+
+    # Calculate actual ratio for description
+    actual_prev_count = len(prev_ds_subset)
+    actual_current_count = len(ds)
+    total_count = actual_prev_count + actual_current_count
+    # Calculate ratio as percentages
+    prev_ratio = round((actual_prev_count / total_count) * 100) if total_count > 0 else 0
+    current_ratio = round((actual_current_count / total_count) * 100) if total_count > 0 else 0
+
+    # Build description for CONTINUAL training
+    description = (f"Trained with phase {prev_phase.phase_number} dataset + "
+                   f"phase {phase.phase_number} dataset with ratio: "
+                   f"{prev_ratio}:{current_ratio} ({actual_prev_count}:{actual_current_count} samples)")
+
+    # Load training profile if provided
+    training_profile = None
+    custom_training_config = None
+    if payload.training_argument_profile_id:
+        training_profile = await repos.TrainingArgumentProfileRepository(db).get_by_id(
+            payload.training_argument_profile_id
+        )
+        if not training_profile:
+            return {
+                "error": "Training argument profile not found",
+                "message": f"No profile found with ID: {payload.training_argument_profile_id}"
+            }
+        # Merge training and LoRA configs for the trainer
+        custom_training_config = training_profile.get_training_config()
+
+    # Train model using continual_train with previous checkpoint path
+    checkpoint_path, training_config = await services.TrainerService(
+        base_model="prajjwal1/bert-tiny",
+        label_config=label_config,
+        base_dir=f'.checkpoints/{pipeline.id}/{phase.phase_number}'
+    ).continual_train(
+        checkpoint_id=prev_trained_model.model_save_path,  # Pass full path to previous model
+        dataset=combined_ds,
+        return_full_path=True,
+        custom_training_config=custom_training_config
+    )
+
+    trained_info = await repos.TrainedModelRepository(db).create(
+        phase_id=phase_id,
+        model_name=f"Payment Classification Model v{phase.phase_number} (Continual)",
+        model_save_path=checkpoint_path,
+        train_type="CONTINUAL",
+        dataset_file_id=ds_file.id,
+        training_params=training_config,  # Save training configuration
+        training_argument_profile_id=payload.training_argument_profile_id,
+        description=description,
+        status="DONE",
+    )
+
+    return {
+        "message": "Model continual trained successfully",
+        "data": trained_info.model_dump(),
+    }
+
 
 @router.post("/phase/{phase_id}/evaluate")
 async def evaluate_human_set(
@@ -553,7 +732,7 @@ async def evaluate_human_set(
 ):
     '''
     1. Load frozen test set
-    2. Load trained model for the phase
+    2. Load trained model by ID from payload
     3. Evaluate on frozen test set
     4. Evaluate on training pool for low confidence samples
     '''
@@ -567,7 +746,10 @@ async def evaluate_human_set(
         return {"error": "Pipeline or label config not found"}
     label_config = pipeline.label_configs[0]  # Get the first label config
 
-    trained_model_info = (await repos.TrainedModelRepository(db).get_by_phase(phase_id))[0]
+    # Fetch trained model by ID from payload
+    trained_model_info = await repos.TrainedModelRepository(db).get_by_id(payload.trained_model_id)
+    if not trained_model_info:
+        return {"error": f"Trained model with ID {payload.trained_model_id} not found"}
     
     # Eval on frozen set
     eval_ds = load_frozen_set(label_config)
@@ -627,10 +809,6 @@ async def evaluate_human_set(
 
     resp = eval_info.model_dump()
     resp["label_metrics"] = json.loads(resp["label_metrics"])
-
-    # Fetch previous phase evaluation
-    # phases = await repos.PhaseRepository(db).get_by_pipeline(pipeline.id)
-    # prev_phases = [p for p in phases if p.phase_number < phase.phase_number]
 
     return {
         "message": "Evaluation completed",
@@ -933,7 +1111,7 @@ async def continue_generation(
     # Create DataManager and DataGeneratorV2 instances
     data_manager = services.DataManager(
         label_config=label_config,
-        rouge_threshold=0.6,
+        rouge_threshold=0.65,
         base_dir=f'.cache/{pipeline.id}/{new_phase.id}/{new_phase.phase_number}'
     )
 
@@ -941,6 +1119,7 @@ async def continue_generation(
         llm=request.app.state.teacher_llm,
         prompt_mgr=request.app.state.prompt_mgr,
         data_manager=data_manager,
+        high_llm=request.app.state.teacher_llm_high,
     )
 
     # Load human seeds
@@ -953,25 +1132,26 @@ async def continue_generation(
         label_count_dict[key] = 200
 
     # Define callback to save each batch to database
-    async def on_batch_generated(batch_number: int, samples: list, temp_file_path: str):
+    async def on_batch_generated(batch_number: int, samples: list, batch_file_path: str, metadata_path: str):
         """Callback to save batch information to database"""
         batch_repo = repos.BatchGeneratedDatasetFileRepository(db)
         await batch_repo.create_batch_file(
             parent_dataset_file_id=ds_file.id,
-            file_path=temp_file_path,
+            file_path=batch_file_path,
             batch_number=batch_number,
             sample_count=len(samples)
         )
-        logger.info(f"Saved batch {batch_number} with {len(samples)} samples to database")
+        logger.info(f"Saved batch {batch_number} with {len(samples)} samples to database (metadata: {metadata_path})")
 
     # Generate with batch tracking
     generated, path = await data_generator_v2.fresh_gen_v2(
         human_seeds=human_seeds,
         expect_total_each_label=label_count_dict,
+        label_config=label_config,
         on_batch_generated=on_batch_generated,
         composal_ds_mgr=services.DataManager(
             label_config=label_config,
-            rouge_threshold=0.6,
+            rouge_threshold=0.65,
             absolute_dir=parent_composal_ds.file_path
         )
     )
@@ -1086,6 +1266,26 @@ async def pipeline_detail(
                 # Parse training_params if exists
                 if trained_model.training_params:
                     trained_model_data["training_params"] = trained_model.get_training_params()
+
+                # Fetch training argument profile if exists
+                if trained_model.training_argument_profile_id:
+                    training_profile = await repos.TrainingArgumentProfileRepository(db).get_by_id(
+                        trained_model.training_argument_profile_id
+                    )
+                    if training_profile:
+                        trained_model_data["training_argument_profile"] = {
+                            "id": training_profile.id,
+                            "name": training_profile.name,
+                            "description": training_profile.description,
+                            "training_config": training_profile.get_training_config(),
+                            "lora_config": training_profile.get_lora_config(),
+                            "created_at": training_profile.created_at.isoformat(),
+                            "updated_at": training_profile.updated_at.isoformat(),
+                        }
+                    else:
+                        trained_model_data["training_argument_profile"] = None
+                else:
+                    trained_model_data["training_argument_profile"] = None
 
                 # Fetch evaluation results for this trained model
                 evaluation_results = await repos.EvaluationResultRepository(db).get_by_trained_model(trained_model.id)
@@ -1303,6 +1503,26 @@ async def view_phase_detail(
         if trained_model.training_params:
             trained_model_data["training_params"] = trained_model.get_training_params()
 
+        # Fetch training argument profile if exists
+        if trained_model.training_argument_profile_id:
+            training_profile = await repos.TrainingArgumentProfileRepository(db).get_by_id(
+                trained_model.training_argument_profile_id
+            )
+            if training_profile:
+                trained_model_data["training_argument_profile"] = {
+                    "id": training_profile.id,
+                    "name": training_profile.name,
+                    "description": training_profile.description,
+                    "training_config": training_profile.get_training_config(),
+                    "lora_config": training_profile.get_lora_config(),
+                    "created_at": training_profile.created_at.isoformat(),
+                    "updated_at": training_profile.updated_at.isoformat(),
+                }
+            else:
+                trained_model_data["training_argument_profile"] = None
+        else:
+            trained_model_data["training_argument_profile"] = None
+
         # Fetch evaluation results for this trained model
         evaluation_results = await repos.EvaluationResultRepository(db).get_by_trained_model(trained_model.id)
         trained_model_data["evaluation_results"] = []
@@ -1328,3 +1548,287 @@ async def view_phase_detail(
         "message": "Phase details retrieved successfully",
         "data": phase_data
     }
+
+# ===== Training Argument Profile Endpoints =====
+
+@router.post("/training-profile")
+async def create_training_profile(
+    payload: schemas.CreateTrainingArgumentProfileRequest,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Create a new training argument profile"""
+    profile_repo = repos.TrainingArgumentProfileRepository(db)
+
+    try:
+        # Serialize training and LoRA configs to JSON
+        training_config_json = json.dumps(payload.training_config.model_dump(exclude_none=True))
+        lora_config_json = json.dumps(payload.lora_config.model_dump(exclude_none=True))
+
+        profile = await profile_repo.create(
+            name=payload.name,
+            training_config=training_config_json,
+            lora_config=lora_config_json,
+            description=payload.description
+        )
+
+        return {
+            "message": "Training argument profile created successfully",
+            "data": {
+                "id": profile.id,
+                "name": profile.name,
+                "description": profile.description,
+                "training_config": profile.get_training_config(),
+                "lora_config": profile.get_lora_config(),
+                "created_at": profile.created_at.isoformat(),
+                "updated_at": profile.updated_at.isoformat(),
+            }
+        }
+    except ValueError as e:
+        return {
+            "error": str(e),
+            "message": "Failed to create training argument profile"
+        }
+    except Exception as e:
+        logger.error(f"Unexpected error creating training profile: {str(e)}")
+        return {
+            "error": str(e),
+            "message": "An unexpected error occurred"
+        }
+
+@router.get("/training-profiles")
+async def list_training_profiles(
+    db: AsyncSession = Depends(get_db_session),
+):
+    """List all training argument profiles"""
+    profile_repo = repos.TrainingArgumentProfileRepository(db)
+    profiles = await profile_repo.get_all()
+
+    return {
+        "message": "Training argument profiles retrieved successfully",
+        "data": [
+            {
+                "id": p.id,
+                "name": p.name,
+                "description": p.description,
+                "training_config": p.get_training_config(),
+                "lora_config": p.get_lora_config(),
+                "created_at": p.created_at.isoformat(),
+                "updated_at": p.updated_at.isoformat(),
+            }
+            for p in profiles
+        ]
+    }
+
+@router.get("/training-profile/{profile_id}")
+async def get_training_profile(
+    profile_id: str,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Get a specific training argument profile by ID"""
+    profile_repo = repos.TrainingArgumentProfileRepository(db)
+    profile = await profile_repo.get_by_id(profile_id)
+
+    if not profile:
+        return {
+            "error": "Training argument profile not found",
+            "message": f"No profile found with ID: {profile_id}"
+        }
+
+    return {
+        "message": "Training argument profile retrieved successfully",
+        "data": {
+            "id": profile.id,
+            "name": profile.name,
+            "description": profile.description,
+            "training_config": profile.get_training_config(),
+            "lora_config": profile.get_lora_config(),
+            "created_at": profile.created_at.isoformat(),
+            "updated_at": profile.updated_at.isoformat(),
+        }
+    }
+
+@router.get("/training-profile/name/{profile_name}")
+async def get_training_profile_by_name(
+    profile_name: str,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Get a specific training argument profile by name"""
+    profile_repo = repos.TrainingArgumentProfileRepository(db)
+    profile = await profile_repo.get_by_name(profile_name)
+
+    if not profile:
+        return {
+            "error": "Training argument profile not found",
+            "message": f"No profile found with name: {profile_name}"
+        }
+
+    return {
+        "message": "Training argument profile retrieved successfully",
+        "data": {
+            "id": profile.id,
+            "name": profile.name,
+            "description": profile.description,
+            "training_config": profile.get_training_config(),
+            "lora_config": profile.get_lora_config(),
+            "created_at": profile.created_at.isoformat(),
+            "updated_at": profile.updated_at.isoformat(),
+        }
+    }
+
+@router.put("/training-profile/{profile_id}")
+async def update_training_profile(
+    profile_id: str,
+    payload: schemas.UpdateTrainingArgumentProfileRequest,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Update an existing training argument profile"""
+    profile_repo = repos.TrainingArgumentProfileRepository(db)
+
+    try:
+        # Serialize configs if provided
+        training_config_json = None
+        lora_config_json = None
+
+        if payload.training_config:
+            training_config_json = json.dumps(payload.training_config.model_dump(exclude_none=True))
+        if payload.lora_config:
+            lora_config_json = json.dumps(payload.lora_config.model_dump(exclude_none=True))
+
+        profile = await profile_repo.update(
+            profile_id=profile_id,
+            name=payload.name,
+            description=payload.description,
+            training_config=training_config_json,
+            lora_config=lora_config_json
+        )
+
+        if not profile:
+            return {
+                "error": "Training argument profile not found",
+                "message": f"No profile found with ID: {profile_id}"
+            }
+
+        return {
+            "message": "Training argument profile updated successfully",
+            "data": {
+                "id": profile.id,
+                "name": profile.name,
+                "description": profile.description,
+                "training_config": profile.get_training_config(),
+                "lora_config": profile.get_lora_config(),
+                "created_at": profile.created_at.isoformat(),
+                "updated_at": profile.updated_at.isoformat(),
+            }
+        }
+    except ValueError as e:
+        return {
+            "error": str(e),
+            "message": "Failed to update training argument profile"
+        }
+    except Exception as e:
+        logger.error(f"Unexpected error updating training profile: {str(e)}")
+        return {
+            "error": str(e),
+            "message": "An unexpected error occurred"
+        }
+
+@router.delete("/training-profile/{profile_id}")
+async def delete_training_profile(
+    profile_id: str,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Delete a training argument profile"""
+    profile_repo = repos.TrainingArgumentProfileRepository(db)
+
+    try:
+        deleted = await profile_repo.delete(profile_id)
+
+        if not deleted:
+            return {
+                "error": "Training argument profile not found",
+                "message": f"No profile found with ID: {profile_id}"
+            }
+
+        return {
+            "message": "Training argument profile deleted successfully"
+        }
+    except Exception as e:
+        logger.error(f"Unexpected error deleting training profile: {str(e)}")
+        return {
+            "error": str(e),
+            "message": "An unexpected error occurred"
+        }
+
+# ===== Model Inference Endpoint =====
+
+@router.post("/inference")
+async def inference_model(
+    payload: schemas.ModelInferenceRequest,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Run inference on trained model with input texts
+
+    Args:
+        model_path: Path to the trained model checkpoint
+        texts: List of texts to classify
+        pipeline_id: Pipeline ID to get label configuration
+
+    Returns:
+        Predictions for each input text with labels and probabilities
+    """
+    try:
+        # Get pipeline and label config
+        pipeline = await repos.PipelineRepository(db).get_by_id(payload.pipeline_id)
+        if not pipeline or not pipeline.label_configs:
+            return {
+                "error": "Pipeline or label config not found",
+                "message": f"No pipeline found with ID: {payload.pipeline_id}"
+            }
+
+        label_config = pipeline.label_configs[0]
+
+        # Verify model path exists
+        from pathlib import Path
+        model_path = Path(payload.model_path)
+        if not model_path.exists():
+            return {
+                "error": "Model path not found",
+                "message": f"The model path does not exist: {payload.model_path}"
+            }
+
+        # Initialize inference model
+        logger.info(f"Loading model from {payload.model_path} for inference")
+        inference_model = ProbModelInference(
+            peft_path=payload.model_path,
+            label_config=label_config
+        )
+
+        # Run predictions
+        predictions = inference_model.predict(payload.texts)
+
+        # Format results
+        formatted_predictions = []
+        for text, pred in zip(payload.texts, predictions):
+            formatted_predictions.append({
+                "text": text,
+                "label": pred["label"],
+                "probability": pred["prob"],
+                "all_probabilities": pred["all_probs"]
+            })
+
+        return {
+            "message": "Inference completed successfully",
+            "predictions": formatted_predictions,
+            "model_info": {
+                "model_path": payload.model_path,
+                "labels": label_config.get_id2label(),
+                "total_predictions": len(formatted_predictions)
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Inference error: {str(e)}")
+        return {
+            "error": str(e),
+            "message": "An error occurred during inference"
+        }
