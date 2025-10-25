@@ -2,6 +2,7 @@ from src.payment_classifier.personas.personas import PersonasSeeder
 from src.payment_classifier.llm.base import BaseLLM
 from src.payment_classifier.prompts.base import BasePromptManager
 from app.core.services.data_manager import DataManager
+from app.core.services.data_validator import DataValidator
 from app.core.schemas.workflow import Result
 from app.core.schemas import Sample
 from app.core.models.models import LabelConfig
@@ -18,12 +19,20 @@ logger = logging.getLogger(__name__)
 class DataGeneratorV2:
     SEED_PROMPT_KEY = "v2/train/seed"
 
-    def __init__(self, llm: BaseLLM, prompt_mgr: BasePromptManager, data_manager: DataManager, high_llm: Optional[BaseLLM] = None):
+    def __init__(
+        self,
+        llm: BaseLLM,
+        prompt_mgr: BasePromptManager,
+        data_manager: DataManager,
+        high_llm: Optional[BaseLLM] = None,
+        validator: Optional[DataValidator] = None
+    ):
         self.llm = llm
         self.high_llm = high_llm  # Higher capability model for when generation gets stuck
         self.prompt_mgr = prompt_mgr
         self.data_manager = data_manager
         self.current_llm = llm  # Track which LLM is currently being used
+        self.validator = validator  # Optional validator for label correction
 
     async def fresh_gen_v2(
         self,
@@ -67,7 +76,6 @@ class DataGeneratorV2:
         parallel_generations, messages_per_call, _ = self._calculate_v2_generation_params(total_expected)
 
         all_results = []
-        previous_batch_results = []
         iteration = 0
 
         # Track last K iterations for model switching logic
@@ -137,10 +145,17 @@ class DataGeneratorV2:
             logger.debug(f"Dedup: {len(batch_results)} -> {len(final_unique)} samples "
                         f"(internal_dup: {len(internal_duplicates)}, external_dup: {len(all_external_duplicates)})")
 
-            # Step 4: Add filtered samples to quantity tracker (only if not exceeding target)
+            # Step 4: Validate and fix labels if validator is available
+            validated_samples = final_unique
+            if self.validator and final_unique:
+                logger.info(f"Validating {len(final_unique)} samples for label correctness...")
+                validated_samples = await self.validator.validate_and_fix(final_unique)
+                logger.info(f"Validation complete for batch {iteration}")
+
+            # Step 5: Add validated samples to quantity tracker (only if not exceeding target)
             added_samples = []
             quota_exceeded = []
-            for sample in final_unique:
+            for sample in validated_samples:
                 if sample.label in quantity_tracker:
                     # Only add if this label hasn't reached its target yet
                     if len(quantity_tracker[sample.label]) < expect_total_each_label[sample.label]:
@@ -149,7 +164,7 @@ class DataGeneratorV2:
                     else:
                         quota_exceeded.append(sample)
 
-            # Step 5: Save batch file and metadata
+            # Step 6: Save batch file and metadata
             label2id = label_config.get_label2id()
 
             # Save accepted samples to batch file
@@ -194,9 +209,8 @@ class DataGeneratorV2:
             if on_batch_generated and batch_file_path:
                 await on_batch_generated(iteration, added_samples, batch_file_path, metadata_path)
 
-            # Update all_results and previous_batch_results for next iteration
+            # Update all_results for next iteration
             all_results.extend(batch_results)
-            previous_batch_results = batch_results
 
             logger.debug(f"Iteration {iteration}: Generated {len(batch_results)} samples, added {len(added_samples)} unique samples to tracker")
 
@@ -528,12 +542,16 @@ class DataGeneratorV2:
             return []
 
         if not needed_labels:
-            # All labels are satisfied, return random sample
-            return random.sample(human_seeds, k=min(len(human_seeds), total_seeds))
+            logger.warning("No labels for seed selection")
+            return []
+
+        # Shuffle human seeds for randomization across batches
+        shuffled_seeds = human_seeds.copy()
+        random.shuffle(shuffled_seeds)
 
         # Group human seeds by label
         seeds_by_label: Dict[Union[str, int], List[Sample]] = {}
-        for seed in human_seeds:
+        for seed in shuffled_seeds:
             if seed.label not in seeds_by_label:
                 seeds_by_label[seed.label] = []
             seeds_by_label[seed.label].append(seed)
@@ -552,10 +570,11 @@ class DataGeneratorV2:
         # Step 2: Fill remaining slots randomly from all human seeds
         remaining_slots = total_seeds - len(selected_seeds)
         if remaining_slots > 0:
-            # Get samples that weren't already selected
-            available_seeds = [s for s in human_seeds if s not in selected_seeds]
+            # Get samples that weren't already selected (from shuffled pool)
+            available_seeds = [s for s in shuffled_seeds if s not in selected_seeds]
             if available_seeds:
-                additional = random.sample(available_seeds, k=min(len(available_seeds), remaining_slots))
+                # Take first N available (already shuffled, no need to sample)
+                additional = available_seeds[:remaining_slots]
                 selected_seeds.extend(additional)
 
         # Shuffle to avoid consistent ordering
@@ -568,34 +587,27 @@ class DataGeneratorV2:
 
     def _select_seeds_legacy(
         self,
-        human_seeds: List[Sample],
-        previous_batch_results: List[Sample],
-        iteration: int
+        human_seeds: List[Sample]
     ) -> List[Sample]:
         """
         LEGACY: Original seed selection logic (no longer used).
         Kept for reference only.
 
-        This method mixed human seeds with previous batch results but did not
-        guarantee label balance coverage.
+        Original behavior:
+        - Iteration 1: Used 2 random human seeds
+        - Later iterations: Mixed 3 samples from previous batch + 4 human seeds
+        - Did not guarantee label balance coverage
+        - Seeds could repeat across batches
 
         Args:
             human_seeds: Human seed samples
-            previous_batch_results: Results from previous batch
-            iteration: Current iteration number
 
         Returns:
             List of selected seed samples
         """
-        if iteration == 1:
-            # First iteration: use human seeds
-            seed_examples = random.sample(human_seeds, k=min(len(human_seeds), 2))
-        else:
-            # Subsequent iterations: mix previous batch results with human seeds
-            new_seed = random.sample(previous_batch_results, k=min(len(previous_batch_results), 3))
-            new_human_seeds = random.sample(human_seeds, k=min(len(human_seeds), 4))
-            seed_examples = new_seed + new_human_seeds
-        return seed_examples
+        # Simplified legacy version - just return random human seeds
+        # (Previous batch results no longer tracked since we use new method)
+        return random.sample(human_seeds, k=min(len(human_seeds), 6))
 
     def _check_and_switch_model(
         self,

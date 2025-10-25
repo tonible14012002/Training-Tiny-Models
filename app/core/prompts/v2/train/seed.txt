@@ -1,42 +1,47 @@
-You are generating training data for a payment intention detection model.
-The goal is to create chat messages that simulate how real humans express immediate payment intentions in chat.
+You are generating training data for a machine learning model that detects payment intentions from chat messages.
+The messages should simulate how real people talk about payments in natural, noisy, and diverse ways.
 
 ## Task Definition
-Generate examples that show different types of payment intentions in chat messages. The model needs to distinguish between:
+Generate chat messages that belong to one of three intent categories:
 
-- **payment_intent**: The user is declaring they will send money right now or in near future OR The user gives an imperative instruction to a system to execute a payment to other (e.g., “Pay Alice $20 now”).
-- **payment_request**: The user request to receive money. (request, inform, force, remind, ...)
-- **open_intent**: All arbitrary chat messages that are not related to any label above (no payment intent / request).
+- **payment_intent**
+The mesasge sender declares they are about to send money or a note to make a payment to someone else.
+Eg: “I’ll send you $5 later.” / “Pay Alice $20 in BTC.”
 
-**Important Rules**
-1. Do not generate messages where the money is already sent. Only intended, requested, or commanded payments are valid.
-❌ Wrong: "Just sent you 3$" -> OPEN INTENT
-✅ Correct: "I'll send you 3$" -> PAYMENT_SEND_INTENT
-✅ Correct: "Give everyone 3$" -> PAYMENT_SEND_INTENT
-✅ Correct: "Send me 3$" -> PAYMENT_REQUEST_INTENT
+- **payment_request**:
+The message sender requests, reminds, or demands money from someone else.
 
-2. Do not generate long-term or delayed intent. Only immediate or short-term intent is valid.
-❌ Wrong: “I’ll pay you enough on next year.”
-✅ Correct: “I'll pay you tomorrow”
+- **open_intent**:
+Any arbitrary messages not related to any intent above but can include payment related context.
 
-3. Confuse between pament intent and payment request
-Eg: Shoot me 500$ for the rent => correct: PAYMENT_REQUEST ,incorrect: PAYMENT_INTENT
+## Important Distinctions
+
+1. Timing of payment
+✅ payment_intent: The act of future or imminent payment or intent but no mentioned
+- “I’ll transfer $50 in a bit.”
+- "Send 40$"
+❌ Not payment_intent if payment already completed
+- “I sent $50 already.” → open_intent
+
+2. Direction of Payment
+- “Pay $10” → payment_intent
+- “Give lisa 10msats” → payment_intent
+- “Send me 10 eth” → payment_request
 
 ## Content Requirements
 1. **Payment Amounts**: 
    - Creative in including the amount in the chat content, Ex: specifc, ambigious, no amount, ...
 
 2. **Payment Methods**:
-   - Be creative in mention crypto, currency, generical terms, or simply no mentioned,...
-   - Include $, crypto currency (sats, msats, bitcoin, ...)
+   - Be creative is mention crypt, currency, generical terms, or no mention,..
+   - Include crypto currency (sats, msats, bitcoin, ...)
+   - Include government-issued currency (USD, EUR, VND, $, ...)
+   - Use slangs, symbol, formal, ...
 
-3. **Language Styles**:
+3. **Language Styles and Tones**:
    - Diversity in language styles: format, casual, slang, command, ...
    - Ensure message length diversity: very-shot (less than 5 words), short, long (10 words), long-tail message, ...
-
-4. **Tones**
-   - Diverse tones.
-   - Add 0–30% contextual noise
+   - Include 0-30% contextual noise
    - Include 0-30% typos, informal grammar
 
 ## Output Requirements
@@ -46,14 +51,7 @@ Eg: Shoot me 500$ for the rent => correct: PAYMENT_REQUEST ,incorrect: PAYMENT_I
    - valid labels: payment_request, payment_intent, open_intent
    - English only content.
 
-   **CRITICAL: EQUAL DISTRIBUTION REQUIREMENT**
-   - YOU MUST generate EXACTLY THE SAME NUMBER of examples for each label
-   - If generating 30 examples total → 10 payment_request, 10 payment_intent, 10 open_intent
-   - If generating 90 examples total → 30 payment_request, 30 payment_intent, 30 open_intent
-   - COUNT your examples before submitting to ensure perfect balance
-   - DO NOT favor any label over others
-
-Simulate following persona for each message
+Role play with given personas as the message sender
 
 ## Personas
 {personas}

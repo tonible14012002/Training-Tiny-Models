@@ -570,3 +570,59 @@ class ModelInferenceResponse(BaseModel):
     message: str
     predictions: List[PredictionResult]
     model_info: Dict[str, Any]
+
+class ConvertToONNXRequest(BaseModel):
+    """Request schema for converting model to ONNX format"""
+    model_path: str = Field(
+        ...,
+        description="Path to the trained model checkpoint (parent directory containing _merged folder and tokenizer files)"
+    )
+    output_name: Optional[str] = Field(
+        default=None,
+        description="Optional custom name for the ONNX output directory. If not provided, uses model_path basename"
+    )
+
+class ConvertToONNXResponse(BaseModel):
+    """Response schema for ONNX conversion"""
+    message: str
+    onnx_path: str
+    model_path: str
+
+class DeleteModelRequest(BaseModel):
+    """Request schema for deleting a trained model"""
+    model_id: str = Field(
+        ...,
+        description="ID of the trained model to delete"
+    )
+    delete_files: bool = Field(
+        default=True,
+        description="Whether to delete physical model files from disk (default: True)"
+    )
+
+class DeleteModelResponse(BaseModel):
+    """Response schema for model deletion"""
+    message: str
+    model_id: str
+    model_path: Optional[str] = None
+    files_deleted: bool
+    database_deleted: bool
+    phase_checkpoint_cleared: bool
+
+class DeleteTrainingProfileRequest(BaseModel):
+    """Request schema for deleting a training profile"""
+    profile_id: str = Field(
+        ...,
+        description="ID of the training profile to delete"
+    )
+    force: bool = Field(
+        default=False,
+        description="Force deletion even if trained models are using this profile (sets their profile_id to NULL)"
+    )
+
+class DeleteTrainingProfileResponse(BaseModel):
+    """Response schema for training profile deletion"""
+    message: str
+    profile_id: str
+    profile_name: str
+    database_deleted: bool
+    models_updated: int

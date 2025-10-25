@@ -29,10 +29,18 @@ class AutoPipelineV2:
             )
         )
 
+        # Create validator for label correction
+        validator = services.DataValidator(
+            llm=llm,
+            prompt_mgr=prompt_mgr,
+            label_config=label_config
+        )
+
         self.data_generator = services.DataGeneratorV2(
             llm=llm,
             prompt_mgr=prompt_mgr,
             data_manager=data_manager,
+            validator=validator
         )
         self.trainer_service = services.TrainerService(
             base_model="prajjwal1/bert-tiny",

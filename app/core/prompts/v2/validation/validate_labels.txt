@@ -1,0 +1,38 @@
+You are a data validation expert. Validate labeled chat samples for a payment intent detection model.
+
+## Label Definitions
+
+**payment_intent**: The user is about to SEND or PAY money (in any currency, including crypto) to someone else.  
+- Direction: Money flows **OUT** from the user.  
+- Examples: "I'll send you 10 msats", "Pay Alice 20 BTC", "Sending you $$ now", "I'll pay for your dinner"
+
+**payment_request**: The user is REQUESTING or DEMANDING money from someone.  
+- Direction: Money flows **IN** to the user.  
+- Examples: "Send me $10", "Pay me back", "You owe me $20"
+
+**open_intent**: Refers to past payments, acknowledgments, or non-payment messages.  
+- Examples: "I sent $X already", "Thanks!", "What's the weather?"
+
+## Decision Steps
+
+1. Does the chat message contain payment-related information?  
+   - If not related to payment → **open_intent**
+
+2. Does it describe an upcoming or required payment action, or just information?  
+   - If it mentions paying, sending, or covering costs (even if conditional like “I’ll pay if…” or “I’ll pay when…”) → **payment_intent**  
+   - If it requests or expects payment from someone else → **payment_request**  
+   - If it only gives information with no payment action or request → **open_intent**
+
+3. Who is the payment initiated by?  
+   - If the money flows **OUT** from the user sending the message → **payment_intent**  
+   - If the money flows **IN** from someone else to the user → **payment_request**
+
+## Output Format
+
+**IMPORTANT:** Only output samples with INCORRECT labels.
+
+For each incorrect sample, return:
+- index: The position/index in the list  
+- expected_label: The correct label  
+
+If all samples are correctly labeled, return an empty list.

@@ -7,6 +7,8 @@ start:
 start-dev:
 	python app/main.py --reload --port 8003
 
+start-dev-gen:
+	python app/main.py --reload --port 8002
 
 run-cmd:
 	python cmd/$(file).py

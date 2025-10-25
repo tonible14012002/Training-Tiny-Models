@@ -64,6 +64,14 @@ async def lifespan(app: FastAPI):
         num_retries=2,
     ))
 
+    validator_llm = LiteLLMProvider(LLMSettings(
+        llm_model_name="gpt-4.1",
+        api_key=settings.OPENAI_API_KEY,
+        temperature=0.0,
+        num_retries=2,
+        max_tokens=4096,
+    ))
+
     prompt_mgr = InmemoryPromptManager()
 
     logger.info("Initializing shared services...")
@@ -76,6 +84,7 @@ async def lifespan(app: FastAPI):
     app.state.teacher_llm_high = teacher_llm_high
     app.state.prompt_mgr = prompt_mgr
     app.state.categorizer_llm = categorizer_llm
+    app.state.validator_llm = validator_llm
 
     logger.info("Application startup complete.")
 

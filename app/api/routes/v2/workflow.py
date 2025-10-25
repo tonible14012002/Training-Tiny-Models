@@ -181,11 +181,19 @@ async def first_generation(
         base_dir=f'.cache/{pipeline.id}/{phase.id}/{phase.phase_number}'
     )
 
+    # Create validator for label correction
+    validator = services.DataValidator(
+        llm=request.app.state.validator_llm,
+        prompt_mgr=request.app.state.prompt_mgr,
+        label_config=label_config
+    )
+
     data_generator_v2 = services.DataGeneratorV2(
         llm=request.app.state.teacher_llm,
         prompt_mgr=request.app.state.prompt_mgr,
         data_manager=data_manager,
         high_llm=request.app.state.teacher_llm_high,
+        validator=validator
     )
 
     human_seeds = load_human_seed(label_config)
@@ -264,11 +272,19 @@ async def test_first_generation(
         base_dir=f'{payload.cache_path}/test/first-gen/{payload.pipeline_id}'
     )
 
+    # Create validator for label correction
+    validator = services.DataValidator(
+        llm=request.app.state.validator_llm,
+        prompt_mgr=request.app.state.prompt_mgr,
+        label_config=label_config
+    )
+
     data_generator_v2 = services.DataGeneratorV2(
         llm=request.app.state.teacher_llm,
         prompt_mgr=request.app.state.prompt_mgr,
         data_manager=data_manager,
         high_llm=request.app.state.teacher_llm_high,
+        validator=validator
     )
 
     human_seeds = load_human_seed(label_config)
@@ -1115,11 +1131,19 @@ async def continue_generation(
         base_dir=f'.cache/{pipeline.id}/{new_phase.id}/{new_phase.phase_number}'
     )
 
+    # Create validator for label correction
+    validator = services.DataValidator(
+        llm=request.app.state.validator_llm,
+        prompt_mgr=request.app.state.prompt_mgr,
+        label_config=label_config
+    )
+
     data_generator_v2 = services.DataGeneratorV2(
         llm=request.app.state.teacher_llm,
         prompt_mgr=request.app.state.prompt_mgr,
         data_manager=data_manager,
         high_llm=request.app.state.teacher_llm_high,
+        validator=validator
     )
 
     # Load human seeds
@@ -1735,25 +1759,105 @@ async def update_training_profile(
 @router.delete("/training-profile/{profile_id}")
 async def delete_training_profile(
     profile_id: str,
+    force: bool = False,
     db: AsyncSession = Depends(get_db_session),
 ):
-    """Delete a training argument profile"""
-    profile_repo = repos.TrainingArgumentProfileRepository(db)
+    """
+    Delete a training argument profile.
 
+    This endpoint:
+    1. Checks if any trained models are using this profile
+    2. If models exist and force=False: Returns error
+    3. If models exist and force=True: Sets their profile_id to NULL, then deletes
+    4. Deletes the profile from database
+
+    Args:
+        profile_id: ID of the profile to delete
+        force: Force deletion even if models are using this profile (default: False)
+        db: Database session
+
+    Returns:
+        DeleteTrainingProfileResponse with deletion status
+
+    Example:
+        DELETE /v2/workflow/training-profile/abc123?force=true
+    """
     try:
-        deleted = await profile_repo.delete(profile_id)
+        profile_repo = repos.TrainingArgumentProfileRepository(db)
+        trained_model_repo = repos.TrainedModelRepository(db)
 
-        if not deleted:
+        logger.info(f"Deleting training profile: {profile_id}")
+
+        # Get the profile
+        profile = await profile_repo.get_by_id(profile_id)
+
+        if not profile:
             return {
                 "error": "Training argument profile not found",
                 "message": f"No profile found with ID: {profile_id}"
             }
 
+        profile_name = profile.name
+
+        # Check if any trained models are using this profile
+        from sqlmodel import select
+        from app.core.models.models import TrainedModel
+
+        statement = select(TrainedModel).where(
+            TrainedModel.training_argument_profile_id == profile_id
+        )
+        result = await db.execute(statement)
+        models_using_profile = list(result.scalars().all())
+        models_count = len(models_using_profile)
+
+        logger.info(f"Found {models_count} trained models using this profile")
+
+        # If models are using this profile and force is False, return error
+        if models_count > 0 and not force:
+            return {
+                "error": "Profile in use",
+                "message": f"Cannot delete profile '{profile_name}'. "
+                          f"{models_count} trained model(s) are using this profile. "
+                          f"Use force=true to delete anyway (will set model profile_id to NULL).",
+                "models_count": models_count
+            }
+
+        # If force=True and models exist, set their profile_id to NULL
+        models_updated = 0
+        if models_count > 0 and force:
+            logger.info(f"Force deletion: Clearing profile reference from {models_count} models")
+
+            for model in models_using_profile:
+                model.training_argument_profile_id = None
+                db.add(model)
+                models_updated += 1
+
+            await db.commit()
+            logger.info(f"Cleared profile reference from {models_updated} models")
+
+        # Delete the profile
+        deleted = await profile_repo.delete(profile_id)
+
+        if not deleted:
+            return {
+                "error": "Deletion failed",
+                "message": f"Failed to delete profile: {profile_id}"
+            }
+
+        logger.info(f"Successfully deleted training profile: {profile_id}")
+
         return {
-            "message": "Training argument profile deleted successfully"
+            "message": "Training argument profile deleted successfully",
+            "profile_id": profile_id,
+            "profile_name": profile_name,
+            "database_deleted": True,
+            "models_updated": models_updated
         }
+
     except Exception as e:
         logger.error(f"Unexpected error deleting training profile: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return {
             "error": str(e),
             "message": "An unexpected error occurred"
@@ -1831,4 +1935,260 @@ async def inference_model(
         return {
             "error": str(e),
             "message": "An error occurred during inference"
+        }
+
+
+@router.post("/convert-to-onnx")
+async def convert_to_onnx(
+    payload: schemas.ConvertToONNXRequest,
+    request: Request,
+):
+    """
+    Convert a trained model to ONNX format for optimized inference.
+
+    This endpoint:
+    1. Loads the merged model from {model_path}/_merged
+    2. Loads the tokenizer from {model_path}
+    3. Converts the model to ONNX format
+    4. Saves both ONNX model and tokenizer to a new directory
+    5. Creates a zip file for download
+
+    Args:
+        payload: Contains model_path and optional output_name
+        request: FastAPI request object
+
+    Returns:
+        FileResponse with the zipped ONNX model
+
+    Example:
+        POST /v2/workflow/convert-to-onnx
+        {
+            "model_path": ".checkpoints/pipeline_id/phase_number",
+            "output_name": "my_onnx_model"  # optional
+        }
+    """
+    try:
+        from pathlib import Path
+        import shutil
+        from optimum.onnxruntime import ORTModelForSequenceClassification
+        from transformers import AutoTokenizer
+        from fastapi.responses import FileResponse
+        import os
+
+        logger.info(f"Converting model to ONNX: {payload.model_path}")
+
+        # Validate model path
+        model_path = Path(payload.model_path)
+        if not model_path.exists():
+            return {
+                "error": "Model path not found",
+                "message": f"The model path does not exist: {payload.model_path}"
+            }
+
+        # Check for _merged folder
+        merged_path = model_path / "_merged"
+        if not merged_path.exists():
+            return {
+                "error": "Merged model not found",
+                "message": f"The _merged folder does not exist in: {payload.model_path}"
+            }
+
+        # Determine output name
+        output_name = payload.output_name or model_path.name
+        temp_output_dir = Path(".cache/onnx") / f"{output_name}_temp"
+
+        # Clean up existing temp directory if it exists
+        if temp_output_dir.exists():
+            logger.info(f"Removing existing temp directory: {temp_output_dir}")
+            shutil.rmtree(temp_output_dir)
+
+        # Create directory structure:
+        # {output_name}_temp/
+        #   ├── tokenizer files (root level)
+        #   └── onnx/
+        #       └── model.onnx
+        temp_output_dir.mkdir(parents=True, exist_ok=True)
+        onnx_subdir = temp_output_dir / "onnx"
+        onnx_subdir.mkdir(parents=True, exist_ok=True)
+
+        logger.info(f"Loading model from {merged_path} for ONNX conversion")
+
+        # Load and convert model to ONNX
+        ort_model = ORTModelForSequenceClassification.from_pretrained(
+            str(merged_path),
+            export=True,
+        )
+
+        # Load tokenizer from the model path (not _merged)
+        tokenizer = AutoTokenizer.from_pretrained(str(model_path))
+
+        # Save tokenizer to root of temp directory
+        logger.info(f"Saving tokenizer to {temp_output_dir}")
+        tokenizer.save_pretrained(str(temp_output_dir))
+
+        # Save ONNX model to onnx/ subdirectory
+        logger.info(f"Saving ONNX model to {onnx_subdir}")
+        ort_model.save_pretrained(str(onnx_subdir))
+
+        # Create zip file
+        zip_path = Path(".cache/onnx") / f"{output_name}.zip"
+        logger.info(f"Creating zip file: {zip_path}")
+
+        # Remove existing zip if present
+        if zip_path.exists():
+            os.remove(zip_path)
+
+        # Create zip archive from temp directory
+        shutil.make_archive(
+            str(zip_path.with_suffix('')),  # base name without extension
+            'zip',  # archive format
+            str(temp_output_dir)  # directory to archive
+        )
+
+        logger.info(f"ONNX conversion completed successfully")
+
+        # Return the zip file for download
+        return FileResponse(
+            path=str(zip_path),
+            media_type='application/zip',
+            filename=f"{output_name}.zip",
+            headers={
+                "Content-Disposition": f"attachment; filename={output_name}.zip"
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"ONNX conversion error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "error": str(e),
+            "message": "An error occurred during ONNX conversion"
+        }
+
+
+@router.post("/delete-model")
+async def delete_trained_model(
+    payload: schemas.DeleteModelRequest,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """
+    Delete a trained model from database and optionally from disk.
+
+    This endpoint:
+    1. Retrieves the trained model from database by ID
+    2. Optionally deletes physical model files from disk
+    3. Deletes the model record from database
+    4. Returns deletion status
+
+    Args:
+        payload: Contains model_id and delete_files flag
+        db: Database session
+
+    Returns:
+        DeleteModelResponse with deletion status
+
+    Example:
+        POST /v2/workflow/delete-model
+        {
+            "model_id": "abc123-model-id",
+            "delete_files": true
+        }
+    """
+    try:
+        from pathlib import Path
+        import shutil
+
+        logger.info(f"Deleting trained model: {payload.model_id}")
+
+        # Get trained model repository
+        trained_model_repo = repos.TrainedModelRepository(db)
+
+        # Retrieve the model
+        trained_model = await trained_model_repo.get_by_id(payload.model_id)
+
+        if not trained_model:
+            return {
+                "error": "Model not found",
+                "message": f"No trained model found with ID: {payload.model_id}"
+            }
+
+        model_path = trained_model.model_save_path
+        files_deleted = False
+        phase_checkpoint_cleared = False
+
+        # Delete physical files if requested
+        if payload.delete_files and model_path:
+            model_path_obj = Path(model_path)
+
+            if model_path_obj.exists():
+                logger.info(f"Deleting model files at: {model_path}")
+
+                try:
+                    # If it's a directory, delete recursively
+                    if model_path_obj.is_dir():
+                        shutil.rmtree(model_path_obj)
+                        logger.info(f"Deleted model directory: {model_path}")
+                    # If it's a file, delete the file
+                    elif model_path_obj.is_file():
+                        model_path_obj.unlink()
+                        logger.info(f"Deleted model file: {model_path}")
+
+                    files_deleted = True
+                except Exception as e:
+                    logger.error(f"Error deleting model files: {e}")
+                    return {
+                        "error": "File deletion failed",
+                        "message": f"Failed to delete model files at {model_path}: {str(e)}",
+                        "model_id": payload.model_id,
+                        "files_deleted": False,
+                        "database_deleted": False
+                    }
+            else:
+                logger.warning(f"Model path does not exist: {model_path}")
+                # Continue with database deletion even if files don't exist
+
+        # Check if this model is referenced in any phase's checkpoint
+        # If so, we should clear the phase's checkpoint_path and checkpoint_id
+        phase_repo = repos.PhaseRepository(db)
+        phase = await phase_repo.get_by_id(trained_model.phase_id)
+
+        if phase and phase.checkpoint_path == model_path:
+            # This model is the phase's checkpoint - clear it
+            logger.info(f"Clearing phase checkpoint reference for phase: {phase.id}")
+            await phase_repo.update(
+                phase.id,
+                checkpoint_id=None,
+                checkpoint_path=None
+            )
+            await db.commit()
+            phase_checkpoint_cleared = True
+
+        # Delete from database
+        database_deleted = await trained_model_repo.delete(payload.model_id)
+
+        if not database_deleted:
+            return {
+                "error": "Database deletion failed",
+                "message": f"Failed to delete model from database: {payload.model_id}"
+            }
+
+        logger.info(f"Successfully deleted trained model: {payload.model_id}")
+
+        return {
+            "message": "Model deleted successfully",
+            "model_id": payload.model_id,
+            "model_path": model_path,
+            "files_deleted": files_deleted,
+            "database_deleted": database_deleted,
+            "phase_checkpoint_cleared": phase_checkpoint_cleared
+        }
+
+    except Exception as e:
+        logger.error(f"Model deletion error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "error": str(e),
+            "message": "An error occurred during model deletion"
         }
